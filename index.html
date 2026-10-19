@@ -491,6 +491,7 @@ function padPos(e){const r=pa.getBoundingClientRect();pad.x=clamp01((e.clientX-r
 pa.addEventListener('pointerdown',e=>{pa.setPointerCapture(e.pointerId);pad.d=1;padPos(e);dot.hidden=false;sendPad()});
 pa.addEventListener('pointermove',e=>{if(!pad.d)return;padPos(e);sendPad()});
 const padUp=()=>{pad.d=0;dot.hidden=true;sendPad()};pa.addEventListener('pointerup',padUp);pa.addEventListener('pointercancel',padUp);
+addEventListener('pointerup',()=>{if(pad.d)padUp()});addEventListener('touchend',e=>{if(pad.d&&e.touches.length===0)padUp()});addEventListener('touchcancel',()=>{if(pad.d)padUp()});pa.addEventListener('lostpointercapture',()=>{if(pad.d)padUp()});document.addEventListener('visibilitychange',()=>{if(document.hidden&&pad.d)padUp()});
 $('padMeow').onclick=()=>{pad.m++;sendPad()};
 
 // Webcam arm tracking: body pose only, the camera image is never shown
@@ -598,11 +599,14 @@ if(window.mqtt){
     c.on('message',(topic,buf)=>{if(topic!==t+'/game')return;let d;try{d=JSON.parse(buf.toString())}catch(e){return}
       if(d&&typeof d.st==='string'){heard=performance.now();setPadStatus(d.st);
         if($('padJoin').hidden===false){$('padJoin').hidden=true}$('padConn').textContent='Connected to the game'}});
-    padRoom={presence:o=>{const now=performance.now();
-      // send at most ~20 times a second, but always send finger up/down right away
-      const urgent=o.ctl&&o.ctl.d!==padRoom.lastD;padRoom.lastD=o.ctl&&o.ctl.d;
-      if(urgent||now-lastPadSend>50){lastPadSend=now;c.publish(t+'/pad',JSON.stringify(o))}
-      else{clearTimeout(padTimer);padTimer=setTimeout(()=>{lastPadSend=performance.now();c.publish(t+'/pad',JSON.stringify(o))},55)}
+    // always build the message from the finger's CURRENT state, so a late send can never re-raise the paw
+    const fresh=()=>JSON.stringify({ctl:{x:+pad.x.toFixed(3),y:+pad.y.toFixed(3),d:pad.d,m:pad.m}});
+    const pub=()=>{clearTimeout(padTimer);padTimer=null;lastPadSend=performance.now();c.publish(t+'/pad',fresh())};
+    padRoom={lastD:null,lastM:0,presence:()=>{const now=performance.now();
+      const urgent=pad.d!==padRoom.lastD||pad.m!==padRoom.lastM;padRoom.lastD=pad.d;padRoom.lastM=pad.m;
+      if(urgent){pub();if(pad.d===0){setTimeout(()=>{if(pad.d===0)pub()},120);setTimeout(()=>{if(pad.d===0)pub()},400)}}
+      else if(now-lastPadSend>33)pub();
+      else if(!padTimer)padTimer=setTimeout(pub,35);
       return Promise.resolve()}};
     c.publish(t+'/pad',JSON.stringify({hello:1}));sendPad();
     setInterval(()=>{sendPad();if(heard&&performance.now()-heard>4000)$('padConn').textContent='Lost the laptop. Is the game still open?'},1500);
