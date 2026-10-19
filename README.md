@@ -1,4 +1,4 @@
-# Fun Games
+# Off The Table
 
 Browser games by Marie (Yuyue Liu).
 
