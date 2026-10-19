@@ -230,8 +230,9 @@ function say(x,y,s,col=C.cream,size=22){S.texts.push({x,y,s,col,size,t:1.2})}
 // ---------- input ----------
 function pos(e){const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height]}
 cv.addEventListener('pointerdown',e=>{audio();if(!S||S.phase!=='play')return;cv.setPointerCapture(e.pointerId);[paw.tx,paw.ty]=pos(e);paw.held=true});
-cv.addEventListener('pointermove',e=>{[paw.tx,paw.ty]=pos(e)});
-const up=()=>{paw.held=false};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);cv.addEventListener('pointerleave',()=>{if(!paw.held)paw.tx=REST.x});
+cv.addEventListener('pointermove',e=>{[paw.tx,paw.ty]=pos(e);if(e.pointerType==='mouse'&&e.buttons===0&&paw.held&&!cam&&!phoneOn)paw.held=false});
+const up=()=>{if(!cam&&!phoneOn)paw.held=false};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);cv.addEventListener('lostpointercapture',up);
+addEventListener('pointerup',up);addEventListener('blur',up);document.addEventListener('visibilitychange',()=>{if(document.hidden)up()});cv.addEventListener('pointerleave',()=>{if(!paw.held)paw.tx=REST.x});
 function meow(){audio();if(!S||S.phase!=='play')return;SFX.meow();say(150,400,'meow',C.cream,20);
   const o=S.owner;
   if((o.s==='watching')&&!extended()&&S.cute<=0){S.score+=25;S.cute=3;say(800,180,'aww! +25',C.pink,26);o.t=Math.min(o.t,.5);ui()}
@@ -250,7 +251,7 @@ const extended=()=>paw.held&&Math.hypot(paw.x-REST.x,paw.y-REST.y)>40;
 function step(dt){
   S.time+=dt;S.cute-=dt;S.wet=Math.max(0,S.wet-dt);S.susp=Math.max(0,S.susp-dt*.03);
   // paw
-  const tx=paw.held?paw.tx:REST.x,ty=paw.held?Math.min(paw.ty,H-30):REST.y,k=1-Math.exp(-(paw.held?28:14)*dt);
+  const tx=paw.held?paw.tx:REST.x,ty=paw.held?Math.min(paw.ty,H-30):REST.y,k=1-Math.exp(-(paw.held?28:45)*dt);
   paw.px=paw.x;paw.py=paw.y;paw.x+=(tx-paw.x)*k;paw.y+=(ty-paw.y)*k;paw.vx=(paw.x-paw.px)/dt;paw.vy=(paw.y-paw.py)/dt;
 
   // table objects
