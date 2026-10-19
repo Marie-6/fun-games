@@ -41,6 +41,11 @@ button:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
 @media (max-width:600px){.tip{margin-left:0;width:100%}}
 @media (max-width:700px){.keys{display:none}.card{gap:8px}.card p{font-size:13px}.card h2{font-size:30px}}
 .ov{overflow:auto}
+.wrap:fullscreen{max-width:none;width:100%;height:100%;box-sizing:border-box;background:var(--ink);padding:12px max(16px,env(safe-area-inset-right,0px)) 12px max(16px,env(safe-area-inset-left,0px));overflow:hidden}
+.wrap:fullscreen .stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;border:none;box-shadow:none;background:var(--ink);border-radius:0}
+.wrap:fullscreen canvas{border:4px solid var(--ink);border-radius:14px;box-shadow:0 0 0 3px var(--table)}
+.wrap:fullscreen .tip{display:none}
+.wrap:fullscreen .top h1{font-size:30px}
 .note{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;background:#2a2340;border:3px solid var(--table);border-radius:14px;padding:14px 16px;line-height:1.55}
 .note #noteBody{flex:1;min-width:0}
 .code{font-family:var(--display);font-size:44px;color:var(--table);letter-spacing:.12em;line-height:1.1;display:block;margin:4px 0}
@@ -98,6 +103,7 @@ button:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
     <button class="b hot" id="meow">Meow (M)</button>
     <button class="b" id="restart">Restart</button>
     <button class="b" id="mute">Sound on</button>
+    <button class="b" id="fsBtn">Full screen (F)</button>
     <button class="b" id="phoneBtn">Phone controller</button>
     <button class="b" id="camBtn">Arm (webcam)</button>
     <span class="tip">Chain crashes fast for combo points. Anything still moving when the door opens gets you caught.</span>
@@ -587,6 +593,26 @@ if(window.Peer){
 }else{
   $('phoneBtn').hidden=true;$('oPad').hidden=true;
 }
+
+// ---------- full screen ----------
+const wrapEl=document.querySelector('.wrap');
+const fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement;
+function goFull(){if(fsEl()||isPhoneish())return;const f=wrapEl.requestFullscreen||wrapEl.webkitRequestFullscreen;if(!f)return;
+  try{const r=f.call(wrapEl);if(r&&r.catch)r.catch(()=>{})}catch(e){}}
+function leaveFull(){const f=document.exitFullscreen||document.webkitExitFullscreen;if(f&&fsEl()){try{const r=f.call(document);if(r&&r.catch)r.catch(()=>{})}catch(e){}}}
+const isPhoneish=()=>matchMedia('(pointer:coarse)').matches&&Math.min(innerWidth,screen.width)<760;
+function fitCanvas(){
+  if(fsEl()){const st=cv.parentElement.getBoundingClientRect(),sc=Math.min(st.width/W,st.height/H);
+    cv.style.width=Math.floor(W*sc)+'px';cv.style.height=Math.floor(H*sc)+'px'}
+  else{cv.style.width='';cv.style.height=''}
+  $('fsBtn').textContent=fsEl()?'Exit full screen':'Full screen (F)';
+}
+['fullscreenchange','webkitfullscreenchange'].forEach(ev=>document.addEventListener(ev,()=>requestAnimationFrame(fitCanvas)));
+addEventListener('resize',()=>{if(fsEl())fitCanvas()});
+$('fsBtn').onclick=()=>{fsEl()?leaveFull():goFull()};
+addEventListener('keydown',e=>{if((e.key==='f'||e.key==='F')&&!(e.target&&e.target.tagName==='INPUT'))fsEl()?leaveFull():goFull()});
+{const ob=$('oB').onclick;$('oB').onclick=()=>{goFull();ob()};}
+{const rb=$('restart').onclick;$('restart').onclick=()=>{goFull();rb()};}
 
 let last=0;
 function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;pollInputs();
