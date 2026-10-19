@@ -131,7 +131,7 @@ button:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
   <button class="b hot padMeow" id="padMeow">Meow</button>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script>
 const W=900,H=560,TL=140,TR=700,TY=330,FY=505;
@@ -543,53 +543,73 @@ function pollInputs(){
   }
 }
 
-// ---------- public site: phone link over PeerJS (no Claude needed) ----------
-const PEER_PREFIX='off-the-table-fg-';
-function padUrl(code){return location.href.split(/[?#]/)[0]+'?pad='+code}
+// ---------- public site: phone link through a relay (works on any network, no account) ----------
+const BROKERS=['wss://broker.emqx.io:8084/mqtt','wss://broker.hivemq.com:8884/mqtt'];
+const TOPIC=code=>'off-the-table-fg/v1/'+code;
+function padUrl(code,b){return location.href.split(/[?#]/)[0]+'?pad='+code+'&b='+b}
 function setPadStatus(st){const el=$('padStatus');
   el.className='padStatus'+(st==='coming'?' warn':st==='watching'||st==='angry'?' look':'');
   el.textContent=st==='coming'?'Footsteps! Lift your finger.':st==='watching'?'They are looking. Freeze.':st==='angry'?'Busted!':st==='over'?'Game over. Restart on the laptop.':'Go wild.'}
 function openPad(){$('pad').hidden=false;$('ov').hidden=true}
+// connect to the first broker that answers; resolves with {client, b}
+function relay(prefer){
+  const order=prefer!=null&&BROKERS[prefer]?[prefer,...BROKERS.keys()].filter((v,i,a)=>a.indexOf(v)===i):[...BROKERS.keys()];
+  return new Promise((res,rej)=>{let i=0;
+    const tryNext=()=>{if(i>=order.length){rej(new Error('offline'));return}
+      const b=order[i++];let done=false;
+      const c=mqtt.connect(BROKERS[b],{connectTimeout:6000,reconnectPeriod:2000,clean:true,clientId:'ott'+Math.random().toString(16).slice(2,10)});
+      const t=setTimeout(()=>{if(!done){done=true;c.end(true);tryNext()}},7000);
+      c.once('connect',()=>{if(done)return;done=true;clearTimeout(t);res({client:c,b})});
+      c.once('error',()=>{if(done)return;done=true;clearTimeout(t);c.end(true);tryNext()});
+    };tryNext()})}
+let hostBroker=0,lastPadMsg=0,ctlState=null;
 showCode=function(){
   const p=phonePeer();phoneOn=!!p;
   if(p){note('<span class="ok">Phone connected.</span> Touch the pad on the phone to swipe. Lift the finger to act innocent. The phone warns you when footsteps start.');return}
-  let qr='';try{const q=qrcode(0,'M');q.addData(padUrl(hostCode));q.make();qr=q.createSvgTag({cellSize:4,margin:2})}catch(e){}
+  let qr='';try{const q=qrcode(0,'M');q.addData(padUrl(hostCode,hostBroker));q.make();qr=q.createSvgTag({cellSize:4,margin:2})}catch(e){}
   note(`<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center"><div style="background:#fff;border-radius:8px;line-height:0">${qr}</div>
-    <div style="min-width:0">Scan this with your phone camera, or open this site on your phone, tap <b>Phone controller</b> and enter:<span class="code">${hostCode}</span>No account needed. Keep both devices online.</div></div>`);
+    <div style="min-width:0">Scan this with your phone camera, or open this site on your phone, tap <b>Phone controller</b> and enter:<span class="code">${hostCode}</span>No account needed. Works on Wi-Fi or mobile data.</div></div>`);
 };
-if(window.Peer){
-  let ctlState=null,conns=[];
-  $('phoneBtn').onclick=()=>{
+if(window.mqtt){
+  $('phoneBtn').onclick=async()=>{
     if(isPhone()){openPad();$('padCode').focus();return}
     audio();if(hostRoom){showCode();return}
     note('Starting the phone link…');
-    const code=String(1000+Math.floor(Math.random()*9000));
-    const peer=new Peer(PEER_PREFIX+code);
-    peer.on('open',()=>{hostCode=code;
-      hostRoom={peers:()=>ctlState?[{sameTab:false,presence:{ctl:ctlState}}]:[],
-        presence:o=>{for(const c of conns)if(c.open)c.send({st:o.st});return Promise.resolve()}};
-      showCode()});
-    peer.on('connection',c=>{conns.push(c);
-      c.on('open',()=>{lastSent=''});
-      c.on('data',d=>{if(d&&typeof d==='object'&&d.ctl)ctlState=d.ctl});
-      c.on('close',()=>{conns=conns.filter(x=>x!==c);if(!conns.length){ctlState=null;paw.held=false}})});
-    peer.on('error',e=>{if(e.type==='unavailable-id'){peer.destroy();$('phoneBtn').onclick()}
-      else if(!hostRoom)note('Could not start the phone link. Check your internet connection and try again.')});
+    let r;try{r=await relay()}catch(e){note('Could not reach the phone relay. Check your internet connection and try again.');return}
+    const code=String(1000+Math.floor(Math.random()*9000));hostCode=code;hostBroker=r.b;
+    const c=r.client,t=TOPIC(code);
+    c.subscribe(t+'/pad');
+    c.on('message',(topic,buf)=>{if(topic!==t+'/pad')return;let d;try{d=JSON.parse(buf.toString())}catch(e){return}
+      if(d&&typeof d==='object'&&d.ctl&&typeof d.ctl==='object'){ctlState=d.ctl;lastPadMsg=performance.now()}
+      if(d&&d.hello)c.publish(t+'/game',JSON.stringify({st:lastSent||'away'}))});
+    hostRoom={peers:()=>ctlState&&performance.now()-lastPadMsg<4000?[{sameTab:false,presence:{ctl:ctlState}}]:[],
+      presence:o=>{c.publish(t+'/game',JSON.stringify({st:o.st}));return Promise.resolve()}};
+    setInterval(()=>{c.publish(t+'/game',JSON.stringify({st:lastSent||'away'}));if(!hostRoom.peers().length&&phoneOn){paw.held=false;showCode()}},1000);
+    showCode();
   };
-  $('padGo').onclick=()=>{
+  let padTimer=null,lastPadSend=0;
+  $('padGo').onclick=async(_,prefer)=>{
     const code=$('padCode').value.replace(/\D/g,'').slice(0,4);
     if(code.length!==4){$('padConn').textContent='Enter the 4-digit code';return}
     $('padConn').textContent='Connecting…';
-    const peer=new Peer();
-    peer.on('open',()=>{const c=peer.connect(PEER_PREFIX+code);
-      c.on('open',()=>{padRoom={presence:o=>{if(c.open)c.send(o);return Promise.resolve()}};
-        $('padJoin').hidden=true;$('padConn').textContent='Connected to the game';sendPad()});
-      c.on('data',d=>{if(d&&typeof d==='object'&&typeof d.st==='string')setPadStatus(d.st)});
-      c.on('close',()=>{padRoom=null;$('padJoin').hidden=false;$('padConn').textContent='Disconnected. Enter the code again.'})});
-    peer.on('error',e=>{$('padConn').textContent=e.type==='peer-unavailable'?'No game with that code. Check the laptop screen.':'Could not connect. Try again.'});
+    let r;try{r=await relay(prefer)}catch(e){$('padConn').textContent='No internet connection. Try again.';return}
+    const c=r.client,t=TOPIC(code);let heard=0;
+    c.subscribe(t+'/game');
+    c.on('message',(topic,buf)=>{if(topic!==t+'/game')return;let d;try{d=JSON.parse(buf.toString())}catch(e){return}
+      if(d&&typeof d.st==='string'){heard=performance.now();setPadStatus(d.st);
+        if($('padJoin').hidden===false){$('padJoin').hidden=true}$('padConn').textContent='Connected to the game'}});
+    padRoom={presence:o=>{const now=performance.now();
+      // send at most ~20 times a second, but always send finger up/down right away
+      const urgent=o.ctl&&o.ctl.d!==padRoom.lastD;padRoom.lastD=o.ctl&&o.ctl.d;
+      if(urgent||now-lastPadSend>50){lastPadSend=now;c.publish(t+'/pad',JSON.stringify(o))}
+      else{clearTimeout(padTimer);padTimer=setTimeout(()=>{lastPadSend=performance.now();c.publish(t+'/pad',JSON.stringify(o))},55)}
+      return Promise.resolve()}};
+    c.publish(t+'/pad',JSON.stringify({hello:1}));sendPad();
+    setInterval(()=>{sendPad();if(heard&&performance.now()-heard>4000)$('padConn').textContent='Lost the laptop. Is the game still open?'},1500);
+    setTimeout(()=>{if(!heard){$('padConn').textContent='No game with that code yet. Check the code on the laptop.';$('padJoin').hidden=false}},6000);
   };
-  const qp=new URLSearchParams(location.search).get('pad');
-  if(qp&&/^\d{4}$/.test(qp)){openPad();$('padCode').value=qp;$('padGo').onclick()}
+  const qs=new URLSearchParams(location.search),qp=qs.get('pad'),qb=+qs.get('b');
+  if(qp&&/^\d{4}$/.test(qp)){openPad();$('padCode').value=qp;$('padGo').onclick(null,Number.isInteger(qb)?qb:0)}
 }else{
   $('phoneBtn').hidden=true;$('oPad').hidden=true;
 }
