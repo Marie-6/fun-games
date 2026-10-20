@@ -537,7 +537,7 @@ $('camBtn').onclick=async()=>{
   if(!hand){label.textContent='Tracker failed';note('Hand tracking could not load. Check your internet connection and reload. ('+why.slice(0,120)+')');stream.getTracks().forEach(t=>t.stop());return}
   const grab=document.createElement('canvas');grab.width=320;grab.height=240;
   cam={grab,gctx:grab.getContext('2d',{willReadFrequently:true}),dark:0,video:v,hand,lastT:-1,lastFrame:performance.now(),meowT:0,mini,mctx:mini.getContext('2d'),label,state:'',sm:null,gone:0};
-  note('<span class="ok">Hand tracking on.</span> The small box shows what the camera sees as dots, never your image. '+ARM_HELP);
+  note('<span class="ok">Hand tracking on (version 6).</span> The small box shows what the camera sees as dots, never your image. '+ARM_HELP);
 };
 function camState(s,label){if(cam.state!==s){cam.state=s;cam.label.textContent=label;cam.mini.parentElement.dataset.s=s}}
 const HAND_LINKS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
