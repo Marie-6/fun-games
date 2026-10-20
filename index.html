@@ -46,15 +46,10 @@ button:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
 .wrap:fullscreen canvas{border:4px solid var(--ink);border-radius:14px;box-shadow:0 0 0 3px var(--table)}
 .wrap:fullscreen .tip{display:none}
 .wrap:fullscreen .top h1{font-size:30px}
-.camBox{position:absolute;right:10px;bottom:10px;width:160px;border:3px solid var(--table);border-radius:10px;overflow:hidden;background:var(--ink);pointer-events:none}
-.camLayer{position:relative;line-height:0}
-.camLayer canvas{position:relative;z-index:1;display:block;width:100%;height:auto}
-.camVid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
-.camBox[data-s="dim"] span{background:var(--lamp)}
-.camBox span{display:block;font-size:12px;font-weight:800;text-align:center;padding:3px 4px;background:var(--cream);color:var(--ink)}
-.camBox[data-s="up"] span{background:var(--table)}
-.camBox[data-s="meow"] span{background:var(--pink)}
-.camBox[data-s="nov"] span,.camBox[data-s="err"] span{background:#ff5a5a;color:#fff}
+.stage{position:relative}
+.camVidHidden{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;z-index:0;pointer-events:none}
+.stage canvas{position:relative;z-index:1}
+.stage .ov{z-index:3}
 .note{display:flex;gap:14px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;background:#2a2340;border:3px solid var(--table);border-radius:14px;padding:14px 16px;line-height:1.55}
 .note #noteBody{flex:1;min-width:0}
 .code{font-family:var(--display);font-size:44px;color:var(--table);letter-spacing:.12em;line-height:1.1;display:block;margin:4px 0}
@@ -506,7 +501,7 @@ $('padMeow').onclick=()=>{pad.m++;sendPad()};
 // Webcam arm tracking: body pose only, the camera image is never shown
 const ARM_HELP='Hold your hand up in front of the camera and move it to swipe. Pull it out of view, or hold completely still, to act innocent. Show both hands to meow (or press M).';
 $('camBtn').onclick=async()=>{
-  audio();if(cam){note('<span class="ok">Camera control is on.</span> '+ARM_HELP);return}
+  audio();if(cam)return;
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){note('This browser can\'t use the camera here. Open the game at marie-6.github.io/fun-games in Chrome or Safari on your laptop.');return}
   let stream;
   try{stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:'user'},audio:false})}
@@ -517,18 +512,14 @@ $('camBtn').onclick=async()=>{
       :n==='NotReadableError'?'The camera is being used by another app (Zoom, FaceTime, Photo Booth…). Close it and try again.'
       :'The camera could not start ('+(n||'unknown error')+').');return}
   const v=$('vid');v.srcObject=stream;
-  const box=document.createElement('div');box.className='camBox';
-  box.innerHTML='<div class="camLayer"><canvas width="160" height="120"></canvas></div><span>Starting camera…</span>';
-  document.querySelector('.stage').appendChild(box);
-  v.removeAttribute('style');v.className='camVid';box.querySelector('.camLayer').prepend(v);try{await v.play()}catch(e){}
+  v.removeAttribute('style');v.className='camVidHidden';cv.parentElement.prepend(v);try{await v.play()}catch(e){}
   const grab=document.createElement('canvas');grab.width=320;grab.height=240;
   const small=document.createElement('canvas');small.width=64;small.height=48;
-  const mini=box.querySelector('canvas');
   cam={video:v,hand:null,mode:'motion',grab,gctx:grab.getContext('2d',{willReadFrequently:true}),
     small,sctx:small.getContext('2d',{willReadFrequently:true}),prev:null,motionT:0,
     lastT:-1,lastFrame:performance.now(),start:performance.now(),handSeen:0,meowT:0,
-    mini,mctx:mini.getContext('2d'),label:box.querySelector('span'),state:'',sm:null,gone:0,dark:0,bright:128};
-  note('<span class="ok">Camera on (version 7).</span> Loading hand recognition… you can already wave to move the paw. '+ARM_HELP);
+    state:'',sm:null,gone:0,dark:0,bright:128,bg:null,noise:0};
+  $('note').hidden=true;
   // hand recognition on the CPU (the GPU path returns nothing on some Macs)
   try{
     const vision=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
@@ -536,26 +527,32 @@ $('camBtn').onclick=async()=>{
     cam.hand=await vision.HandLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate:'CPU'},
       runningMode:'IMAGE',numHands:2,minHandDetectionConfidence:.35,minHandPresenceConfidence:.35,minTrackingConfidence:.35});
     cam.start=performance.now();
-    note('<span class="ok">Camera on (version 7).</span> '+ARM_HELP);
-  }catch(e){cam.hand=null;note('<span class="ok">Camera on (version 7), motion mode.</span> Hand recognition could not load, so the paw follows movement: wave your hand to swipe, hold still to act innocent.')}
+  }catch(e){cam.hand=null}
 };
-function camState(s,label){if(cam.state!==s){cam.state=s;cam.label.textContent=label;cam.mini.parentElement.dataset.s=s}}
-const HAND_LINKS=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
-function miniBg(){const g=cam.mctx;g.fillStyle=C.ink;g.fillRect(0,0,160,120);g.strokeStyle='rgba(255,244,220,.15)';g.lineWidth=1;g.strokeRect(.5,.5,159,119)}
-function drawHands(hands){const g=cam.mctx,w=160,h=120;
-  for(const lm of hands){g.strokeStyle=C.table;g.lineWidth=2;g.beginPath();
-    for(const[a,b]of HAND_LINKS){g.moveTo((1-lm[a].x)*w,lm[a].y*h);g.lineTo((1-lm[b].x)*w,lm[b].y*h)}g.stroke();
-    g.fillStyle=C.pink;for(const p of lm){g.beginPath();g.arc((1-p.x)*w,p.y*h,2.2,0,7);g.fill()}}}
-function steerTo(nx,ny){const tx=clamp01((1-nx-.12)/.76)*W,ty=clamp01((ny-.08)/.7)*H;
-  cam.sm=cam.sm?{x:cam.sm.x+(tx-cam.sm.x)*.55,y:cam.sm.y+(ty-cam.sm.y)*.55}:{x:tx,y:ty};
+function camState(st){cam.state=st}
+function steerTo(nx,ny){const tx=clamp01((1-nx-.12)/.76)*W,ty=clamp01((ny-.05)/.75)*H;
+  cam.sm=cam.sm?{x:cam.sm.x+(tx-cam.sm.x)*.5,y:cam.sm.y+(ty-cam.sm.y)*.5}:{x:tx,y:ty};
   paw.tx=cam.sm.x;paw.ty=cam.sm.y;paw.held=true}
-// motion: compare tiny grayscale frames; returns {area, x, y} in 0..1 (camera coords)
-function motionOf(){const g=cam.sctx;g.drawImage(cam.grab,0,0,64,48);const d=g.getImageData(0,0,64,48).data;
-  const cur=new Float32Array(64*48);for(let i=0;i<cur.length;i++)cur[i]=(d[i*4]+d[i*4+1]+d[i*4+2])/3;
-  const prev=cam.prev;cam.prev=cur;if(!prev)return{area:0,pts:[]};
-  let n=0,sx=0,sy=0,minY=1;const pts=[];
-  for(let y=0;y<48;y++)for(let x=0;x<64;x++){const i=y*64+x;if(Math.abs(cur[i]-prev[i])>22){n++;sx+=x;sy+=y;if(y/48<minY)minY=y/48;pts.push(i)}}
-  return n?{area:n/(64*48),x:(sx/n+.5)/64,y:(sy/n+.5)/48,top:minY,pts}:{area:0,pts:[]}}
+// motion: 32x24 grid of 10x10-pixel block averages (averaging removes camera noise),
+// compared with a slowly-updating background; only the largest connected moving blob counts
+const GW=32,GH=24;
+function motionOf(px){const cur=new Float32Array(GW*GH);
+  for(let gy=0;gy<GH;gy++)for(let gx=0;gx<GW;gx++){let t=0,n=0;
+    for(let y=gy*10;y<gy*10+10;y+=2)for(let x=gx*10;x<gx*10+10;x+=2){const i=(y*320+x)*4;t+=px[i]+px[i+1]+px[i+2];n++}
+    cur[gy*GW+gx]=t/n/3}
+  const prev=cam.prev;cam.prev=cur;if(!prev)return null;
+  const mov=new Uint8Array(GW*GH);let diffSum=0;
+  for(let i=0;i<cur.length;i++){const d=Math.abs(cur[i]-prev[i]);diffSum+=d;if(d>Math.max(10,cam.noise*3.5))mov[i]=1}
+  // learn the camera's normal noise level while little is moving
+  const avg=diffSum/cur.length;cam.noise=cam.noise?cam.noise*.97+Math.min(avg,cam.noise*2+1)*.03:avg;
+  // largest connected blob
+  const seen=new Uint8Array(GW*GH);let best=null;
+  for(let i=0;i<mov.length;i++){if(!mov[i]||seen[i])continue;
+    const q=[i];seen[i]=1;let n=0,sx=0,sy=0;
+    while(q.length){const j=q.pop();n++;const x=j%GW,y=(j/GW)|0;sx+=x;sy+=y;
+      for(const k of[x>0?j-1:-1,x<GW-1?j+1:-1,y>0?j-GW:-1,y<GH-1?j+GW:-1])if(k>=0&&mov[k]&&!seen[k]){seen[k]=1;q.push(k)}}
+    if(!best||n>best.n)best={n,x:(sx/n+.5)/GW,y:(sy/n+.5)/GH}}
+  return best}
 function pollCam(){
   const v=cam.video,now=performance.now();
   if(v.paused)v.play().catch(()=>{});
@@ -565,22 +562,19 @@ function pollCam(){
   const px=cam.gctx.getImageData(0,0,320,240).data;let sum=0;for(let i=0;i<px.length;i+=160)sum+=px[i]+px[i+1]+px[i+2];
   cam.bright=sum/(px.length/160)/3;
   if(cam.bright<6){if(++cam.dark>30){paw.held=false;miniBg();camState('nov','Camera image is black')}return}cam.dark=0;
-  const mo=motionOf();
-  miniBg();
+  const mo=motionOf(px);
   // 1) hand recognition
   let hands=[];
   if(cam.hand){try{const r=cam.hand.detect(cam.grab);hands=(r&&r.landmarks)||[]}catch(e){}}
-  if(hands.length){cam.handSeen=now;cam.mode='hand';cam.gone=0;drawHands(hands);
-    if(hands.length>=2){paw.held=false;camState('meow','Two hands: meow');if(now-cam.meowT>1500){cam.meowT=now;meow()}return}
+  if(hands.length){cam.handSeen=now;cam.mode='hand';cam.gone=0;
+    if(hands.length>=2){paw.held=false;camState('meow');if(now-cam.meowT>1500){cam.meowT=now;meow()}return}
     const lm=hands[0];let cx=0,cy=0;for(const i of[0,5,9,13,17]){cx+=lm[i].x;cy+=lm[i].y}
-    steerTo(cx/5,cy/5);camState('up','Hand seen: paw out');return}
-  // fall back to motion if recognition hasn't found a hand for a while (or couldn't load)
+    steerTo(cx/5,cy/5);camState('up');return}
   if(!cam.hand||now-Math.max(cam.handSeen,cam.start)>4000)cam.mode='motion';
-  if(cam.mode==='hand'){if(++cam.gone>3){paw.held=false;cam.sm=null;camState(cam.bright<35?'dim':'down',cam.bright<35?'Too dark: add light':'No hand: innocent')}return}
-  // motion mode: draw moving pixels as dots, steer to the top of the movement (fingertips)
-  const g=cam.mctx;g.fillStyle=C.table;for(const i of mo.pts){g.fillRect((63-(i%64))*2.5,Math.floor(i/64)*2.5,2.5,2.5)}
-  if(mo.area>.008){cam.motionT=now;steerTo(mo.x,Math.min(mo.y,mo.top+.08));camState('up','Motion: paw out')}
-  else if(now-cam.motionT>700){paw.held=false;cam.sm=null;camState(cam.bright<35?'dim':'down',cam.bright<35?'Too dark: add light':'Still: innocent')}
+  if(cam.mode==='hand'){if(++cam.gone>3){paw.held=false;cam.sm=null;camState('down')}return}
+  // 2) motion: a real blob (a moving hand), not scattered noise
+  if(mo&&mo.n>=10){cam.motionT=now;steerTo(mo.x,mo.y);camState('up')}
+  else if(now-cam.motionT>600){paw.held=false;cam.sm=null;camState('down')}
 }
 function pollInputs(){
   if(cam)pollCam();
