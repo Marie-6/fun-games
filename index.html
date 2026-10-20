@@ -530,7 +530,8 @@ $('camBtn').onclick=async()=>{
   }catch(e){cam.hand=null}
 };
 function camState(st){cam.state=st}
-function steerTo(nx,ny){const tx=clamp01((1-nx-.12)/.76)*W,ty=clamp01((ny-.05)/.75)*H;
+// low hand = table height: camera y .35..1 maps to just above the table .. near the floor
+function steerTo(nx,ny){const tx=clamp01((1-nx-.1)/.8)*W,ty=120+clamp01((ny-.35)/.6)*(H-170);
   cam.sm=cam.sm?{x:cam.sm.x+(tx-cam.sm.x)*.5,y:cam.sm.y+(ty-cam.sm.y)*.5}:{x:tx,y:ty};
   paw.tx=cam.sm.x;paw.ty=cam.sm.y;paw.held=true}
 // motion: 32x24 grid of 10x10-pixel block averages (averaging removes camera noise),
