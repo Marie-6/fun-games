@@ -114,7 +114,7 @@ button:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
   </div>
 </div>
 
-<video id="vid" playsinline muted hidden></video>
+<video id="vid" playsinline muted autoplay style="position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none"></video>
 
 <div id="pad" hidden>
   <div class="padTop">
@@ -495,43 +495,60 @@ addEventListener('pointerup',()=>{if(pad.d)padUp()});addEventListener('touchend'
 $('padMeow').onclick=()=>{pad.m++;sendPad()};
 
 // Webcam arm tracking: body pose only, the camera image is never shown
-const ARM_HELP='Lift your forearm (wrist above elbow) to put the paw out, then sweep your arm sideways to swipe. Drop your arm to act innocent. Raise both arms above your head to meow.';
+const ARM_HELP='Raise your hand to about chest or shoulder height to put the paw out, then move it sideways to swipe. Drop your hand below the camera view to act innocent. Raise both hands above your head to meow.';
 $('camBtn').onclick=async()=>{
   audio();if(cam){note('<span class="ok">Arm tracking is on.</span> '+ARM_HELP);return}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){note('This browser can\'t use the camera here. Open the game in Chrome or Safari on your laptop.');return}
   let stream;
-  try{stream=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480}})}
-  catch(e){note('The camera is blocked. To play with your arm, allow camera access for this site in your browser settings and try again.');return}
-  note('Loading arm tracking…');
-  const v=$('vid');v.srcObject=stream;await v.play().catch(()=>{});
+  try{stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:'user'},audio:false})}
+  catch(e){const n=e&&e.name;
+    note(n==='NotAllowedError'||n==='SecurityError'
+      ?'Camera access was blocked. Click the camera icon in your browser\'s address bar, choose <b>Allow</b>, then reload the page. On a Mac, also check <b>System Settings → Privacy &amp; Security → Camera</b> and turn on your browser.'
+      :n==='NotFoundError'?'No camera was found on this computer.'
+      :n==='NotReadableError'?'The camera is being used by another app (Zoom, FaceTime, Photo Booth…). Close it and try again.'
+      :'The camera could not start ('+(n||'unknown error')+').');return}
+  note('Loading arm tracking… (the first time takes a few seconds)');
+  const v=$('vid');v.srcObject=stream;
+  try{await v.play()}catch(e){}
+  let pose=null,why='';
   try{
     const vision=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
     const fs=await vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
-    const pose=await vision.PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',delegate:'GPU'},runningMode:'VIDEO',numPoses:1});
-    const chip=document.createElement('div');chip.className='camChip';chip.textContent='Arm tracking: looking for you';document.querySelector('.stage').appendChild(chip);
-    cam={video:v,pose,lastT:-1,meowT:0,chip,state:''};
-    note('<span class="ok">Arm tracking on.</span> Stand or sit so your upper body is in view. '+ARM_HELP);
-  }catch(e){note('Arm tracking could not load. Check your internet connection and try again.');stream.getTracks().forEach(t=>t.stop())}
+    const model='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task';
+    for(const delegate of['GPU','CPU']){
+      try{pose=await vision.PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:model,delegate},runningMode:'VIDEO',numPoses:1});break}
+      catch(e){why=String(e&&e.message||e)}}
+  }catch(e){why=String(e&&e.message||e)}
+  if(!pose){note('Arm tracking could not load. Check your internet connection and reload. ('+why.slice(0,120)+')');stream.getTracks().forEach(t=>t.stop());return}
+  const chip=document.createElement('div');chip.className='camChip';chip.textContent='Arm tracking: looking for you';document.querySelector('.stage').appendChild(chip);
+  cam={video:v,pose,lastT:-1,meowT:0,chip,state:'',sm:null};
+  note('<span class="ok">Arm tracking on.</span> Sit back a little so your shoulders are in view. '+ARM_HELP);
 };
 function camState(s,label){if(cam.state!==s){cam.state=s;cam.chip.textContent=label;cam.chip.dataset.s=s}}
 function pollCam(){
-  const v=cam.video;if(v.readyState<2||v.currentTime===cam.lastT)return;cam.lastT=v.currentTime;
+  const v=cam.video;if(v.readyState<2)return;
+  if(v.paused)v.play().catch(()=>{});
+  if(v.currentTime===cam.lastT)return;cam.lastT=v.currentTime;
   let r;try{r=cam.pose.detectForVideo(v,performance.now())}catch(e){return}
   const lm=r&&r.landmarks&&r.landmarks[0];
-  if(!lm){paw.held=false;camState('none','Arm tracking: step into view');return}
-  const vis=p=>p&&(p.visibility==null||p.visibility>.5);
-  // pick whichever arm has its wrist higher; landmarks 11-16 = shoulders, elbows, wrists
-  const arms=[[11,13,15],[12,14,16]].map(([s,e,w])=>({s:lm[s],e:lm[e],w:lm[w]})).filter(a=>vis(a.e)&&vis(a.w));
+  if(!lm){paw.held=false;camState('none','Arm tracking: can\'t see you');return}
+  const vis=p=>p&&p.x>-.05&&p.x<1.05&&p.y<1.02&&(p.visibility==null||p.visibility>.45);
   const nose=lm[0];
-  const up=arms.filter(a=>a.w.y<a.e.y-.02);
-  if(arms.length===2&&nose&&arms.every(a=>a.w.y<nose.y)){
-    paw.held=false;camState('meow','Arm tracking: both arms up');
+  // 11/12 shoulders, 13/14 elbows, 15/16 wrists, 19/20 index fingers
+  const sides=[[11,13,15,19],[12,14,16,20]].map(([s,e,w,f])=>({s:lm[s],e:lm[e],w:vis(lm[w])?lm[w]:vis(lm[f])?lm[f]:null}));
+  const up=sides.filter(a=>{if(!a.w)return false;
+    const shY=vis(a.s)?a.s.y:(nose?nose.y+.18:.5);
+    return a.w.y<shY+.22 || (vis(a.e)&&a.w.y<a.e.y-.03)});
+  if(nose&&sides.every(a=>a.w&&a.w.y<nose.y)){
+    paw.held=false;camState('meow','Arm tracking: both hands up');
     const now=performance.now();if(now-cam.meowT>1500){cam.meowT=now;meow()}return}
-  if(!up.length){paw.held=false;camState('down','Arm tracking: arm down, innocent');return}
-  const a=up.sort((p,q)=>p.w.y-q.w.y)[0];
-  paw.tx=clamp01((1-a.w.x-.1)/.8)*W;paw.ty=clamp01((a.w.y-.12)/.6)*H;paw.held=true;
+  if(!up.length){paw.held=false;cam.sm=null;camState('down','Arm tracking: hand down, innocent');return}
+  const w=up.sort((p,q)=>p.w.y-q.w.y)[0].w;
+  const tx=clamp01((1-w.x-.1)/.8)*W,ty=clamp01((w.y-.08)/.6)*H;
+  cam.sm=cam.sm?{x:cam.sm.x+(tx-cam.sm.x)*.6,y:cam.sm.y+(ty-cam.sm.y)*.6}:{x:tx,y:ty};
+  paw.tx=cam.sm.x;paw.ty=cam.sm.y;paw.held=true;
   camState('up','Arm tracking: paw out');
 }
-
 function pollInputs(){
   if(cam)pollCam();
   if(hostRoom){
