@@ -47,7 +47,10 @@ button:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
 .wrap:fullscreen .tip{display:none}
 .wrap:fullscreen .top h1{font-size:30px}
 .camBox{position:absolute;right:10px;bottom:10px;width:160px;border:3px solid var(--table);border-radius:10px;overflow:hidden;background:var(--ink);pointer-events:none}
-.camBox canvas{display:block;width:100%;height:auto}
+.camLayer{position:relative;line-height:0}
+.camLayer canvas{position:relative;z-index:1;display:block;width:100%;height:auto}
+.camVid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+.camBox[data-s="dim"] span{background:var(--lamp)}
 .camBox span{display:block;font-size:12px;font-weight:800;text-align:center;padding:3px 4px;background:var(--cream);color:var(--ink)}
 .camBox[data-s="up"] span{background:var(--table)}
 .camBox[data-s="meow"] span{background:var(--pink)}
@@ -516,8 +519,9 @@ $('camBtn').onclick=async()=>{
   const v=$('vid');v.srcObject=stream;try{await v.play()}catch(e){}
   // mini skeleton view (no camera image)
   const box=document.createElement('div');box.className='camBox';
-  box.innerHTML='<canvas width="160" height="120"></canvas><span>Loading tracker…</span>';
+  box.innerHTML='<div class="camLayer"><canvas width="160" height="120"></canvas></div><span>Loading tracker…</span>';
   document.querySelector('.stage').appendChild(box);
+  v.removeAttribute('style');v.className='camVid';box.querySelector('.camLayer').prepend(v);try{await v.play()}catch(e){}
   const mini=box.querySelector('canvas'),label=box.querySelector('span');
   note('Loading hand tracking… (the first time takes a few seconds)');
   let hand=null,why='';
@@ -531,7 +535,8 @@ $('camBtn').onclick=async()=>{
       catch(e){why=String(e&&e.message||e)}}
   }catch(e){why=String(e&&e.message||e)}
   if(!hand){label.textContent='Tracker failed';note('Hand tracking could not load. Check your internet connection and reload. ('+why.slice(0,120)+')');stream.getTracks().forEach(t=>t.stop());return}
-  cam={video:v,hand,lastT:-1,lastFrame:performance.now(),meowT:0,mini,mctx:mini.getContext('2d'),label,state:'',sm:null,gone:0};
+  const grab=document.createElement('canvas');grab.width=320;grab.height=240;
+  cam={grab,gctx:grab.getContext('2d',{willReadFrequently:true}),dark:0,video:v,hand,lastT:-1,lastFrame:performance.now(),meowT:0,mini,mctx:mini.getContext('2d'),label,state:'',sm:null,gone:0};
   note('<span class="ok">Hand tracking on.</span> The small box shows what the camera sees as dots, never your image. '+ARM_HELP);
 };
 function camState(s,label){if(cam.state!==s){cam.state=s;cam.label.textContent=label;cam.mini.parentElement.dataset.s=s}}
@@ -547,11 +552,18 @@ function pollCam(){
   if(v.readyState<2||v.currentTime===cam.lastT){
     if(now-cam.lastFrame>2500)camState('nov','No video from camera');return}
   cam.lastT=v.currentTime;cam.lastFrame=now;
-  let r;try{r=cam.hand.detectForVideo(v,now)}catch(e){camState('err','Tracker error');return}
+  // copy the frame first, so the tracker always gets real pixels
+  const gw=cam.grab.width,gh=cam.grab.height;
+  try{cam.gctx.drawImage(v,0,0,gw,gh)}catch(e){camState('err','Camera frame error');return}
+  let sum=0;const px=cam.gctx.getImageData(0,0,gw,gh).data;for(let i=0;i<px.length;i+=160)sum+=px[i]+px[i+1]+px[i+2];
+  const bright=sum/(px.length/160)/3;
+  if(bright<6){if(++cam.dark>30){paw.held=false;drawMini([]);camState('nov','Camera image is black')}return}cam.dark=0;
+  let r;try{r=cam.hand.detectForVideo(cam.grab,now)}catch(e){camState('err','Tracker error');return}
+  cam.bright=bright;
   const hands=(r&&r.landmarks)||[];drawMini(hands);
   if(!hands.length){
     // tiny grace period so a flicker doesn't drop the paw
-    if(++cam.gone>2){paw.held=false;cam.sm=null;camState('down','No hand: innocent')}return}
+    if(++cam.gone>2){paw.held=false;cam.sm=null;camState(cam.bright<35?'dim':'down',cam.bright<35?'Too dark: add light':'No hand: innocent')}return}
   cam.gone=0;
   if(hands.length>=2){paw.held=false;camState('meow','Two hands: meow');
     if(now-cam.meowT>1500){cam.meowT=now;meow()}return}
