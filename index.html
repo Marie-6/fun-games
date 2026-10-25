@@ -240,9 +240,9 @@ function say(x,y,s,col=C.cream,size=22){S.texts.push({x,y,s,col,size,t:1.2})}
 // ---------- input ----------
 function pos(e){const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height]}
 cv.addEventListener('pointerdown',e=>{audio();if(!S||S.phase!=='play')return;cv.setPointerCapture(e.pointerId);[paw.tx,paw.ty]=pos(e);paw.held=true});
-cv.addEventListener('pointermove',e=>{[paw.tx,paw.ty]=pos(e);if(e.pointerType==='mouse'&&e.buttons===0&&paw.held&&!cam&&!phoneOn)paw.held=false});
+cv.addEventListener('pointermove',e=>{if(cam)return;[paw.tx,paw.ty]=pos(e);if(e.pointerType==='mouse'&&e.buttons===0&&paw.held&&!cam&&!phoneOn)paw.held=false});
 const up=()=>{if(!cam&&!phoneOn)paw.held=false};cv.addEventListener('pointerup',up);cv.addEventListener('pointercancel',up);cv.addEventListener('lostpointercapture',up);
-addEventListener('pointerup',up);addEventListener('blur',up);document.addEventListener('visibilitychange',()=>{if(document.hidden)up()});cv.addEventListener('pointerleave',()=>{if(!paw.held)paw.tx=REST.x});
+addEventListener('pointerup',up);addEventListener('blur',up);document.addEventListener('visibilitychange',()=>{if(document.hidden)up()});cv.addEventListener('pointerleave',()=>{if(!cam&&!paw.held)paw.tx=REST.x});
 function meow(){audio();if(!S||S.phase!=='play')return;SFX.meow();say(150,400,'meow',C.cream,20);
   const o=S.owner;
   if((o.s==='watching')&&!extended()&&S.cute<=0){S.score+=25;S.cute=3;say(800,180,'aww! +25',C.pink,26);o.t=Math.min(o.t,.5);ui()}
@@ -515,18 +515,18 @@ $('camBtn').onclick=async()=>{
   v.removeAttribute('style');v.className='camVidHidden';cv.parentElement.prepend(v);try{await v.play()}catch(e){}
   const grab=document.createElement('canvas');grab.width=320;grab.height=240;
   const small=document.createElement('canvas');small.width=64;small.height=48;
-  cam={video:v,hand:null,mode:'motion',grab,gctx:grab.getContext('2d',{willReadFrequently:true}),
+  cam={video:v,hand:null,grab,gctx:grab.getContext('2d',{willReadFrequently:true}),
     small,sctx:small.getContext('2d',{willReadFrequently:true}),prev:null,motionT:0,
-    lastT:-1,lastFrame:performance.now(),start:performance.now(),handSeen:0,meowT:0,
-    state:'',sm:null,gone:0,dark:0,bright:128,bg:null,noise:0};
+    lastT:-1,lastFrame:performance.now(),handSeen:0,meowT:0,both:0,
+    state:'',sm:null,dark:0,bright:128,bg:null,noise:0};
   $('note').hidden=true;
   // hand recognition on the CPU (the GPU path returns nothing on some Macs)
   try{
     const vision=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
     const fs=await vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
     cam.hand=await vision.HandLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate:'CPU'},
-      runningMode:'IMAGE',numHands:2,minHandDetectionConfidence:.35,minHandPresenceConfidence:.35,minTrackingConfidence:.35});
-    cam.start=performance.now();
+      runningMode:'VIDEO',numHands:2,minHandDetectionConfidence:.35,minHandPresenceConfidence:.35,minTrackingConfidence:.35});
+    paw.held=false;cam.sm=null;
   }catch(e){cam.hand=null}
 };
 function camState(st){cam.state=st}
@@ -562,17 +562,22 @@ function pollCam(){
   try{cam.gctx.drawImage(v,0,0,320,240)}catch(e){camState('err','Camera frame error');return}
   const px=cam.gctx.getImageData(0,0,320,240).data;let sum=0;for(let i=0;i<px.length;i+=160)sum+=px[i]+px[i+1]+px[i+2];
   cam.bright=sum/(px.length/160)/3;
-  if(cam.bright<6){if(++cam.dark>30){paw.held=false;miniBg();camState('nov','Camera image is black')}return}cam.dark=0;
+  if(cam.bright<6){if(++cam.dark>30){paw.held=false;camState('nov','Camera image is black')}return}cam.dark=0;
   const mo=motionOf(px);
   // 1) hand recognition
   let hands=[];
-  if(cam.hand){try{const r=cam.hand.detect(cam.grab);hands=(r&&r.landmarks)||[]}catch(e){}}
-  if(hands.length){cam.handSeen=now;cam.mode='hand';cam.gone=0;
-    if(hands.length>=2){paw.held=false;camState('meow');if(now-cam.meowT>1500){cam.meowT=now;meow()}return}
-    const lm=hands[0];let cx=0,cy=0;for(const i of[0,5,9,13,17]){cx+=lm[i].x;cy+=lm[i].y}
-    steerTo(cx/5,cy/5);camState('up');return}
-  if(!cam.hand||now-Math.max(cam.handSeen,cam.start)>4000)cam.mode='motion';
-  if(cam.mode==='hand'){if(++cam.gone>3){paw.held=false;cam.sm=null;camState('down')}return}
+  if(cam.hand){try{const r=cam.hand.detectForVideo(cam.grab,now);hands=(r&&r.landmarks)||[]}catch(e){}}
+  const ctr=lm=>{let x=0,y=0;for(const i of[0,5,9,13,17]){x+=lm[i].x;y+=lm[i].y}return{x:x/5,y:y/5}};
+  const cs=hands.map(ctr);
+  // the model sometimes reports one hand twice; only count two hands that are far apart
+  const two=cs.length>=2&&Math.hypot(cs[0].x-cs[1].x,cs[0].y-cs[1].y)>.2;
+  if(cs.length){cam.handSeen=now;
+    if(two){if(++cam.both>=4){paw.held=false;cam.sm=null;camState('meow');if(now-cam.meowT>1500){cam.meowT=now;meow()}}return}
+    cam.both=0;steerTo(cs[0].x,cs[0].y);camState('up');return}
+  cam.both=0;
+  // once hand recognition is running, motion tracking stays off: otherwise hiding the hand
+  // (acting innocent) would let head and body movement push the paw out
+  if(cam.hand){if(now-cam.handSeen>250){paw.held=false;cam.sm=null;camState('down')}return}
   // 2) motion: a real blob (a moving hand), not scattered noise
   if(mo&&mo.n>=10){cam.motionT=now;steerTo(mo.x,mo.y);camState('up')}
   else if(now-cam.motionT>600){paw.held=false;cam.sm=null;camState('down')}
@@ -684,7 +689,7 @@ addEventListener('keydown',e=>{if((e.key==='f'||e.key==='F')&&!(e.target&&e.targ
 {const rb=$('restart').onclick;$('restart').onclick=()=>{goFull();rb()};}
 
 let last=0;
-function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;pollInputs();
+function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;try{pollInputs()}catch(e){console.error(e)}
   if(S&&S.phase!=='menu'){const n=3;for(let i=0;i<n;i++)step(dt/n)}
   else{paw.x+=(REST.x-paw.x)*.1;paw.y+=(REST.y-paw.y)*.1}
   draw();requestAnimationFrame(loop)}
