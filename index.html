@@ -499,7 +499,7 @@ addEventListener('pointerup',()=>{if(pad.d)padUp()});addEventListener('touchend'
 $('padMeow').onclick=()=>{pad.m++;sendPad()};
 
 // Webcam arm tracking: body pose only, the camera image is never shown
-const ARM_HELP='Hold your hand up in front of the camera and move it to swipe. Pull it out of view, or hold completely still, to act innocent. Show both hands to meow (or press M).';
+const ARM_HELP='Hold your hand up in front of the camera and move it to swipe. Pull it out of view, or hold completely still, to act innocent. Raise your left fist to meow (or press M).';
 $('camBtn').onclick=async()=>{
   audio();if(cam)return;
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){note('This browser can\'t use the camera here. Open the game at marie-6.github.io/fun-games in Chrome or Safari on your laptop.');return}
@@ -517,7 +517,7 @@ $('camBtn').onclick=async()=>{
   const small=document.createElement('canvas');small.width=64;small.height=48;
   cam={video:v,hand:null,busy:false,grab,gctx:grab.getContext('2d',{willReadFrequently:true}),
     small,sctx:small.getContext('2d',{willReadFrequently:true}),prev:null,motionT:0,
-    lastT:-1,lastFrame:performance.now(),handSeen:0,meowT:0,both:0,
+    lastT:-1,lastFrame:performance.now(),handSeen:0,meowT:0,fist:0,
     state:'',sm:null,dark:0,bright:128,bg:null,noise:0};
   $('note').hidden=true;
   // hand recognition on the CPU (the GPU path returns nothing on some Macs), in a worker:
@@ -540,18 +540,24 @@ function handWorker(){
     lm=await V.HandLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate:'CPU'},
       runningMode:'VIDEO',numHands:2,minHandDetectionConfidence:.35,minHandPresenceConfidence:.35,minTrackingConfidence:.35});
     postMessage({ready:true})}catch(e){postMessage({fail:String(e)})}})();
-  // reply with each hand's palm centre (wrist + knuckles)
+  // reply with each hand's palm centre (wrist + knuckles), which hand it is, and whether it is a fist
+  const d=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
   onmessage=e=>{const{bmp,t}=e.data;let hands=[];
-    try{hands=((lm&&lm.detectForVideo(bmp,t).landmarks)||[]).map(h=>{let x=0,y=0;for(const i of[0,5,9,13,17]){x+=h[i].x;y+=h[i].y}return{x:x/5,y:y/5}})}catch(err){}
+    try{const r=lm?lm.detectForVideo(bmp,t):null;
+      hands=((r&&r.landmarks)||[]).map((h,k)=>{let x=0,y=0;for(const i of[0,5,9,13,17]){x+=h[i].x;y+=h[i].y}
+        // a finger is curled when its tip is closer to the wrist than its middle joint
+        let curled=0;for(const[tip,pip]of[[8,6],[12,10],[16,14],[20,18]])if(d(h[tip],h[0])<d(h[pip],h[0]))curled++;
+        const hd=r.handedness&&r.handedness[k]&&r.handedness[k][0];
+        return{x:x/5,y:y/5,label:hd?hd.categoryName:'',fist:curled>=3}})}catch(err){}
     bmp.close();postMessage({hands})};
 }
 function onHands(cs){const now=performance.now();
-  // the model sometimes reports one hand twice; only count two hands that are far apart
-  const two=cs.length>=2&&Math.hypot(cs[0].x-cs[1].x,cs[0].y-cs[1].y)>.2;
-  if(!cs.length){cam.both=0;return}
-  cam.handSeen=now;
-  if(two){if(++cam.both>=4){paw.held=false;cam.sm=null;camState('meow');if(now-cam.meowT>1500){cam.meowT=now;meow()}}return}
-  cam.both=0;steerTo(cs[0].x,cs[0].y);camState('up')}
+  // on the unmirrored camera image the model's "Left" is the player's own left hand (checked with a photo)
+  const fist=cs.find(h=>h.fist&&h.label==='Left'),steer=cs.find(h=>h!==fist);
+  // a raised left fist meows once it has been held for a few frames
+  if(fist){if(++cam.fist===3&&now-cam.meowT>1500){cam.meowT=now;meow()}}else cam.fist=0;
+  if(!steer)return;
+  cam.handSeen=now;steerTo(steer.x,steer.y);camState('up')}
 function camState(st){cam.state=st}
 // low hand = table height: camera y .35..1 maps to just above the table .. near the floor
 function steerTo(nx,ny){const tx=clamp01((1-nx-.1)/.8)*W,ty=120+clamp01((ny-.35)/.6)*(H-170);
