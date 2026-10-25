@@ -500,17 +500,24 @@ addEventListener('pointerup',()=>{if(pad.d)padUp()});addEventListener('touchend'
 $('padMeow').onclick=()=>{pad.m++;sendPad()};
 
 // Webcam arm tracking: body pose only, the camera image is never shown
-const ARM_HELP=`<b>Playing with your arms</b> <span id="camReady">· starting hand tracking…</span>
+// left-handed players swap the hands: left moves the paw, right fist meows
+let lefty=false;try{lefty=localStorage.getItem('ott-lefty')==='1'}catch(e){}
+const armHelp=()=>{const ph=lefty?'left':'right',mw=lefty?'right':'left';return `<b>Playing with your arms</b> <span id="camReady">· starting hand tracking…</span>
+<button class="b" id="handBtn" style="margin-left:8px">${lefty?'Left-handed: on':'Left-handed: off'}</button>
 <ul class="armHelp">
-<li><b>Swipe:</b> hold your right hand open in front of the camera, at about chest height (that's the table), and sweep it sideways to knock things off.</li>
+<li><b>Swipe:</b> hold your ${ph} hand open in front of the camera, at about chest height (that's the table), and sweep it sideways to knock things off.</li>
 <li><b>Reach higher or lower:</b> raise or lower your hand. The paw follows it, mirror style.</li>
 <li><b>Act innocent:</b> drop your hand out of view. The paw pulls back right away. Do this when you hear footsteps.</li>
-<li><b>Meow:</b> raise your left fist. Your left hand never moves the paw, so it is safe to raise anytime. Meowing while the owner is looking (paw pulled back) earns a bonus. You can also press M.</li>
+<li><b>Meow:</b> raise your ${mw} fist. Your ${mw} hand never moves the paw, so it is safe to raise anytime. Meowing while the owner is looking (paw pulled back) earns a bonus. You can also press M.</li>
 </ul>
-Tip: stand or sit about an arm's length from the camera, in good light, so both hands fit in the picture.`;
+Tip: stand or sit about an arm's length from the camera, in good light, so both hands fit in the picture.`};
+function showArmHelp(){note(armHelp());if(cam&&cam.readyMsg)camReady(cam.readyMsg)}
+$('noteBody').addEventListener('click',e=>{if(e.target.id!=='handBtn')return;
+  lefty=!lefty;try{localStorage.setItem('ott-lefty',lefty?'1':'0')}catch(err){}
+  if(cam){cam.meowAt=null;cam.fist=0}showArmHelp()});
 function camReady(html){cam.readyMsg=html;const el=document.getElementById('camReady');if(el)el.innerHTML=html}
 $('camBtn').onclick=async()=>{
-  audio();if(cam){note(ARM_HELP);if(cam.readyMsg)camReady(cam.readyMsg);return}
+  audio();if(cam){showArmHelp();return}
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){note('This browser can\'t use the camera here. Open the game at marie-6.github.io/fun-games in Chrome or Safari on your laptop.');return}
   let stream;
   try{stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:'user'},audio:false})}
@@ -526,9 +533,9 @@ $('camBtn').onclick=async()=>{
   const small=document.createElement('canvas');small.width=64;small.height=48;
   cam={video:v,hand:null,busy:false,grab,gctx:grab.getContext('2d',{willReadFrequently:true}),
     small,sctx:small.getContext('2d',{willReadFrequently:true}),prev:null,motionT:0,
-    lastT:-1,lastFrame:performance.now(),handSeen:0,meowT:0,fist:0,leftAt:null,
+    lastT:-1,lastFrame:performance.now(),handSeen:0,meowT:0,fist:0,meowAt:null,
     state:'',sm:null,dark:0,bright:128,bg:null,noise:0};
-  note(ARM_HELP);
+  showArmHelp();
   // hand recognition on the CPU (the GPU path returns nothing on some Macs), in a worker:
   // it takes ~45ms a frame, which would stall the game if it ran here
   try{
@@ -564,20 +571,21 @@ function handWorker(){
 function onHands(cs){const now=performance.now();
   // the model sometimes reports one hand twice
   if(cs.length>=2&&Math.hypot(cs[0].x-cs[1].x,cs[0].y-cs[1].y)<.1)cs=[cs[0]];
-  // find the player's left hand. With two hands it is the one on the camera's right (the image is
-  // not mirrored). With one, trust the model's label ("Left" is the player's left, checked with a
-  // photo) or that it is where the left hand just was, since the label flickers while it moves
-  let left=null,sure=false;
-  if(cs.length>=2){left=cs[0].x>cs[1].x?cs[0]:cs[1];sure=true}
-  else if(cs.length){const h=cs[0],l=cam.leftAt;
-    if(h.label==='Left'){left=h;sure=true}
-    else if(l&&now-l.t<600&&Math.hypot(h.x-l.x,h.y-l.y)<.15)left=h}
-  // only a sure sighting renews the memory, so a right hand can't get stuck being taken for the left
-  if(sure)cam.leftAt={x:left.x,y:left.y,t:now};
-  // a raised left fist meows once it has been held for a few frames
-  if(left&&left.fist){if(++cam.fist===3&&now-cam.meowT>1500){cam.meowT=now;meow()}}else cam.fist=0;
-  // only an open right hand moves the paw: raising the left hand to meow must never reach out
-  const steer=cs.find(h=>h!==left&&!h.fist);
+  // find the meow hand (the player's left, or right when left-handed). With two hands, the player's
+  // left is the one on the camera's right (the image is not mirrored). With one, trust the model's
+  // label ("Left" is the player's left, checked with a photo) or that it is where the meow hand
+  // just was, since the label flickers while it moves
+  let mh=null,sure=false;
+  if(cs.length>=2){mh=(cs[0].x>cs[1].x)!==lefty?cs[0]:cs[1];sure=true}
+  else if(cs.length){const h=cs[0],l=cam.meowAt;
+    if(h.label===(lefty?'Right':'Left')){mh=h;sure=true}
+    else if(l&&now-l.t<600&&Math.hypot(h.x-l.x,h.y-l.y)<.15)mh=h}
+  // only a sure sighting renews the memory, so the paw hand can't get stuck being taken for the meow hand
+  if(sure)cam.meowAt={x:mh.x,y:mh.y,t:now};
+  // a raised meow fist meows once it has been held for a few frames
+  if(mh&&mh.fist){if(++cam.fist===3&&now-cam.meowT>1500){cam.meowT=now;meow()}}else cam.fist=0;
+  // only the open paw hand moves the paw: raising the other hand to meow must never reach out
+  const steer=cs.find(h=>h!==mh&&!h.fist);
   if(!steer)return;
   cam.handSeen=now;steerTo(steer.x,steer.y);camState('up')}
 function camState(st){cam.state=st}
