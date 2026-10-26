@@ -54,7 +54,12 @@ button:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
 .note #noteBody{flex:1;min-width:0}
 .code{font-family:var(--display);font-size:44px;color:var(--table);letter-spacing:.12em;line-height:1.1;display:block;margin:4px 0}
 .ok{color:#9ff0b5;font-weight:800}
-.armHelp{margin:8px 0;padding-left:20px}.armHelp li{margin:4px 0}
+.camOv{z-index:4;background:rgba(27,22,38,.93);align-items:flex-start}.camOv .card{max-width:520px;margin:auto}
+.camOv .card h2{font-size:clamp(28px,5vw,44px)}
+.camOv .keys{display:grid}
+.handPick{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.handPick .b[aria-pressed="true"]{background:var(--table)}
+.camTip{font-size:14px}
 .camChip{position:absolute;right:10px;top:10px;font-size:13px;font-weight:800;padding:4px 12px;border-radius:999px;border:3px solid var(--ink);background:var(--cream);color:var(--ink);pointer-events:none}
 .camChip[data-s="up"]{background:var(--table)}
 .camChip[data-s="meow"]{background:var(--pink)}
@@ -101,6 +106,16 @@ button:focus-visible{outline:3px solid var(--sky);outline-offset:2px}
         </div>
         <button class="b hot" id="oB">Be a cat</button>
         <button class="b" id="oPad">On your phone? Use it as the controller</button>
+      </div>
+    </div>
+    <div class="ov camOv" id="camOv" hidden>
+      <div class="card">
+        <h2>Play with your hands</h2>
+        <p>Which hand do you want to swipe with?</p>
+        <div class="handPick"><button class="b" id="pickR">Right-handed</button><button class="b" id="pickL">Left-handed</button></div>
+        <div class="keys" id="camRules"></div>
+        <p class="camTip">Sit about an arm's length from the camera, in good light, so both hands fit in the picture. <span id="camReady">Starting hand tracking…</span></p>
+        <button class="b hot" id="camGo">Start</button>
       </div>
     </div>
   </div>
@@ -502,20 +517,20 @@ $('padMeow').onclick=()=>{pad.m++;sendPad()};
 // Webcam arm tracking: body pose only, the camera image is never shown
 // left-handed players swap the hands: left moves the paw, right fist meows
 let lefty=false;try{lefty=localStorage.getItem('ott-lefty')==='1'}catch(e){}
-const armHelp=()=>{const ph=lefty?'left':'right',mw=lefty?'right':'left';return `<b>Playing with your arms</b> <span id="camReady">· starting hand tracking…</span>
-<button class="b" id="handBtn" style="margin-left:8px">${lefty?'Left-handed: on':'Left-handed: off'}</button>
-<ul class="armHelp">
-<li><b>Swipe:</b> hold your ${ph} hand open in front of the camera, at about chest height (that's the table), and sweep it sideways to knock things off.</li>
-<li><b>Reach higher or lower:</b> raise or lower your hand. The paw follows it, mirror style.</li>
-<li><b>Act innocent:</b> drop your hand out of view. The paw pulls back right away. Do this when you hear footsteps.</li>
-<li><b>Meow:</b> raise your ${mw} fist. Your ${mw} hand never moves the paw, so it is safe to raise anytime. Meowing while the owner is looking (paw pulled back) earns a bonus. You can also press M.</li>
-</ul>
-Tip: stand or sit about an arm's length from the camera, in good light, so both hands fit in the picture.`};
-function showArmHelp(){note(armHelp());if(cam&&cam.readyMsg)camReady(cam.readyMsg)}
-$('noteBody').addEventListener('click',e=>{if(e.target.id!=='handBtn')return;
-  lefty=!lefty;try{localStorage.setItem('ott-lefty',lefty?'1':'0')}catch(err){}
-  if(cam){cam.meowAt=null;cam.fist=0}showArmHelp()});
-function camReady(html){cam.readyMsg=html;const el=document.getElementById('camReady');if(el)el.innerHTML=html}
+function camRules(){const P=lefty?'Left':'Right',M=lefty?'Right':'Left';
+  $('camRules').innerHTML=`<kbd>${P} hand open</kbd><span>Paw out. Hold it at chest height (that's the table) and sweep sideways to knock things off. Raise or lower it to reach.</span>
+<kbd>Drop it</kbd><span>Act innocent. Pull your hand out of view and the paw comes back.</span>
+<kbd>${M} fist</kbd><span>Meow. Cute when they're watching, suspicious when they're not. Your ${M.toLowerCase()} hand never moves the paw.</span>
+<kbd>Both fists</kbd><span>Paw back and meow at once: the safe pose when they're looking.</span>
+<kbd>Footsteps</kbd><span>Someone's coming. Drop your hand before the door opens.</span>`;
+  $('pickR').setAttribute('aria-pressed',!lefty);$('pickL').setAttribute('aria-pressed',lefty)}
+function pickHand(l){lefty=l;try{localStorage.setItem('ott-lefty',l?'1':'0')}catch(e){}if(cam){cam.meowAt=null;cam.fist=0}camRules()}
+$('pickR').onclick=()=>pickHand(false);$('pickL').onclick=()=>pickHand(true);
+// the game pauses while this is open
+function showArmHelp(){camRules();$('note').hidden=true;hideOv();
+  $('camGo').textContent=S&&S.phase==='play'?'Keep playing':'Start';$('camOv').hidden=false}
+$('camGo').onclick=()=>{audio();$('camOv').hidden=true;if(!S||S.phase!=='play'){hideOv();newGame()}goFull()};
+function camReady(html){cam.readyMsg=html;$('camReady').innerHTML=html}
 $('camBtn').onclick=async()=>{
   audio();if(cam){showArmHelp();return}
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){note('This browser can\'t use the camera here. Open the game at marie-6.github.io/fun-games in Chrome or Safari on your laptop.');return}
@@ -541,13 +556,13 @@ $('camBtn').onclick=async()=>{
   try{
     const w=new Worker(URL.createObjectURL(new Blob(['('+handWorker+')()'],{type:'text/javascript'})));
     w.onmessage=e=>{const d=e.data;
-      if(d.ready){cam.hand=w;paw.held=false;cam.sm=null;camReady('<span class="ok">· ready</span>')}
+      if(d.ready){cam.hand=w;paw.held=false;cam.sm=null;camReady('<span class="ok">Hand tracking is ready.</span>')}
       else if(d.fail){w.terminate();camReady(TRACK_FAIL)}
       else{cam.busy=false;onHands(d.hands)}};
     w.onerror=()=>{cam.hand=null;w.terminate();camReady(TRACK_FAIL)};
   }catch(e){cam.hand=null;camReady(TRACK_FAIL)}
 };
-const TRACK_FAIL='· hand tracking could not load, so the paw follows any movement the camera sees instead (fists won\'t meow; press M)';
+const TRACK_FAIL='Hand tracking could not load, so the paw follows any movement the camera sees instead. Fists won\'t meow, so press M.';
 function handWorker(){
   const BASE='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';let lm=null;
   (async()=>{try{
@@ -742,7 +757,7 @@ addEventListener('keydown',e=>{if((e.key==='f'||e.key==='F')&&!(e.target&&e.targ
 
 let last=0;
 function loop(t){const dt=Math.min(.033,(t-last)/1000||0);last=t;try{pollInputs()}catch(e){console.error(e)}
-  if(S&&S.phase!=='menu'){const n=3;for(let i=0;i<n;i++)step(dt/n)}
+  if(S&&S.phase!=='menu'&&$('camOv').hidden){const n=3;for(let i=0;i<n;i++)step(dt/n)}
   else{paw.x+=(REST.x-paw.x)*.1;paw.y+=(REST.y-paw.y)*.1}
   draw();requestAnimationFrame(loop)}
 // idle backdrop before start
