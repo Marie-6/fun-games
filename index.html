@@ -521,6 +521,7 @@ function camRules(){const P=lefty?'Left':'Right',M=lefty?'Right':'Left';
   $('camRules').innerHTML=`<kbd>${P} hand open</kbd><span>Paw out. Hold it at chest height (that's the table) and sweep sideways to knock things off. Raise or lower it to reach.</span>
 <kbd>Drop it</kbd><span>Act innocent. Pull your hand out of view and the paw comes back.</span>
 <kbd>${M} fist</kbd><span>Meow. Cute when they're watching, suspicious when they're not. Your ${M.toLowerCase()} hand never moves the paw.</span>
+<kbd>Open mouth</kbd><span>Meow too. Open wide like you're saying "meow", no hands needed.</span>
 <kbd>Both fists</kbd><span>Paw back and meow at once: the safe pose when they're looking.</span>
 <kbd>Footsteps</kbd><span>Someone's coming. Drop your hand before the door opens.</span>`;
   $('pickR').setAttribute('aria-pressed',!lefty);$('pickL').setAttribute('aria-pressed',lefty)}
@@ -548,7 +549,7 @@ $('camBtn').onclick=async()=>{
   const small=document.createElement('canvas');small.width=64;small.height=48;
   cam={video:v,hand:null,busy:false,grab,gctx:grab.getContext('2d',{willReadFrequently:true}),
     small,sctx:small.getContext('2d',{willReadFrequently:true}),prev:null,motionT:0,
-    lastT:-1,lastFrame:performance.now(),handSeen:0,meowT:0,fist:0,meowAt:null,
+    lastT:-1,lastFrame:performance.now(),handSeen:0,meowT:0,fist:0,mouth:0,meowAt:null,
     state:'',sm:null,dark:0,bright:128,bg:null,noise:0};
   showArmHelp();
   // hand recognition on the CPU (the GPU path returns nothing on some Macs), in a worker:
@@ -558,30 +559,37 @@ $('camBtn').onclick=async()=>{
     w.onmessage=e=>{const d=e.data;
       if(d.ready){cam.hand=w;paw.held=false;cam.sm=null;camReady('<span class="ok">Hand tracking is ready.</span>')}
       else if(d.fail){w.terminate();camReady(TRACK_FAIL)}
-      else{cam.busy=false;onHands(d.hands)}};
+      else{cam.busy=false;onMouth(d.mouth);onHands(d.hands)}};
     w.onerror=()=>{cam.hand=null;w.terminate();camReady(TRACK_FAIL)};
   }catch(e){cam.hand=null;camReady(TRACK_FAIL)}
 };
-const TRACK_FAIL='Hand tracking could not load, so the paw follows any movement the camera sees instead. Fists won\'t meow, so press M.';
+const TRACK_FAIL='Hand tracking could not load, so the paw follows any movement the camera sees instead. Fists and open mouths won\'t meow, so press M.';
 function handWorker(){
-  const BASE='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';let lm=null;
+  const BASE='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';let lm=null,fm=null;
   (async()=>{try{
     // classic worker + CommonJS build: the wasm loader needs importScripts, which module workers lack
     const module={exports:{}};new Function('module','exports',await (await fetch(BASE+'/vision_bundle.cjs')).text())(module,module.exports);
     const V=module.exports,fs=await V.FilesetResolver.forVisionTasks(BASE+'/wasm');
     lm=await V.HandLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate:'CPU'},
       runningMode:'VIDEO',numHands:2,minHandDetectionConfidence:.35,minHandPresenceConfidence:.35,minTrackingConfidence:.35});
+    // the face is only for open-mouth meows, so the hands still work if it fails to load
+    try{fm=await V.FaceLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',delegate:'CPU'},
+      runningMode:'VIDEO',numFaces:1})}catch(e){}
     postMessage({ready:true})}catch(e){postMessage({fail:String(e)})}})();
   // reply with each hand's palm centre (wrist + knuckles), which hand it is, and whether it is a fist
   const d=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
-  onmessage=e=>{const{bmp,t}=e.data;let hands=[];
+  onmessage=e=>{const{bmp,t}=e.data;let hands=[],mouth=false;
     try{const r=lm?lm.detectForVideo(bmp,t):null;
       hands=((r&&r.landmarks)||[]).map((h,k)=>{let x=0,y=0;for(const i of[0,5,9,13,17]){x+=h[i].x;y+=h[i].y}
         // a finger is curled when its tip is closer to the wrist than its middle joint
         let curled=0;for(const[tip,pip]of[[8,6],[12,10],[16,14],[20,18]])if(d(h[tip],h[0])<d(h[pip],h[0]))curled++;
         const hd=r.handedness&&r.handedness[k]&&r.handedness[k][0];
         return{x:x/5,y:y/5,label:hd?hd.categoryName:'',fist:curled>=3}})}catch(err){}
-    bmp.close();postMessage({hands})};
+    // mouth open: gap between the inner lips compared with the face's height (forehead to chin);
+    // talking stays well under this, a wide-open "meow" mouth goes over
+    try{const f=fm&&fm.detectForVideo(bmp,t),m=f&&f.faceLandmarks&&f.faceLandmarks[0];
+      if(m)mouth=d(m[13],m[14])/d(m[10],m[152])>.12}catch(err){}
+    bmp.close();postMessage({hands,mouth})};
 }
 function onHands(cs){const now=performance.now();
   // the model sometimes reports one hand twice
@@ -603,6 +611,9 @@ function onHands(cs){const now=performance.now();
   const steer=cs.find(h=>h!==mh&&!h.fist);
   if(!steer)return;
   cam.handSeen=now;steerTo(steer.x,steer.y);camState('up')}
+// a wide-open mouth held for a few frames meows; close it again to meow once more
+function onMouth(open){if(!open){cam.mouth=0;return}
+  if(++cam.mouth===3&&performance.now()-cam.meowT>1500){cam.meowT=performance.now();meow()}}
 function camState(st){cam.state=st}
 // low hand = table height: camera y .35..1 maps to just above the table .. near the floor
 function steerTo(nx,ny){const tx=clamp01((1-nx-.1)/.8)*W,ty=120+clamp01((ny-.35)/.6)*(H-170);
