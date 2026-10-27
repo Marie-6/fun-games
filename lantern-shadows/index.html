@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lantern Shadows</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#07060a;--ink:#f1e7d2;--muted:#8d806b;--glow:#ffb347;--danger:#ff5a4e;--wall:#d9b071}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center;overflow-x:hidden}
+  h1{font-family:Cinzel,serif;letter-spacing:.25em;margin:18px 0 0;font-size:30px;text-align:center}
+  .tag{color:var(--muted);font-size:13px;margin:6px 16px 10px;text-align:center}
+  .stage{position:relative;width:min(820px,calc(100vw - 32px));aspect-ratio:16/10;border-radius:16px;overflow:hidden;
+    background:#120b05;box-shadow:0 30px 80px rgba(0,0,0,.7)}
+  #light{position:absolute;inset:0;transition:opacity .15s;
+    background:radial-gradient(ellipse 60% 70% at 50% 55%, var(--wall) 0%, #a9763d 35%, #3d220d 70%, #0d0703 100%)}
+  .stage.flicker #light{animation:flicker .5s 2}
+  @keyframes flicker{0%,100%{opacity:1}20%{opacity:.2}40%{opacity:.8}60%{opacity:.1}}
+  .grain{position:absolute;inset:0;pointer-events:none;opacity:.25;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.25) 0 1px,transparent 1px 3px)}
+  #spirit{position:absolute;left:50%;top:52%;font-size:min(30vw,230px);line-height:1;
+    transform:translate(-50%,-50%) scale(.3);opacity:0;
+    filter:grayscale(1) brightness(2.2) blur(3px) drop-shadow(0 0 18px #fff8);mix-blend-mode:screen}
+  #cast{position:absolute;left:50%;top:52%;font-size:min(36vw,280px);line-height:1;transform:translate(-50%,-50%) scale(.7);
+    opacity:0;filter:brightness(0) blur(1.5px);transition:transform .35s cubic-bezier(.2,1.5,.4,1),opacity .35s}
+  #cast.on{opacity:.9;transform:translate(-50%,-50%) scale(1)}
+  .hud{position:absolute;top:12px;left:14px;right:14px;display:flex;justify-content:space-between;align-items:flex-start;
+    font-weight:600;color:#1b0e04;text-shadow:0 1px 0 #fff4}
+  .hud .big{font-family:Cinzel,serif;font-size:26px}
+  #lives{font-size:20px;letter-spacing:4px}
+  #prompt{position:absolute;bottom:46px;width:100%;text-align:center;font-family:Cinzel,serif;font-size:24px;
+    color:#1b0e04;letter-spacing:.12em}
+  #hint{position:absolute;bottom:22px;width:100%;text-align:center;font-size:14px;color:#3a2210}
+  #timer{position:absolute;left:0;bottom:0;height:6px;background:var(--glow);width:0;box-shadow:0 0 12px var(--glow)}
+  #toast{position:absolute;top:30%;width:100%;text-align:center;font-family:Cinzel,serif;font-size:32px;color:#fff;
+    opacity:0;transition:opacity .2s,transform .4s;text-shadow:0 0 18px #000}
+  #toast.show{opacity:1;transform:translateY(-14px)}
+  #cam{position:absolute;right:10px;bottom:12px;width:22%;border-radius:8px;overflow:hidden;opacity:.8;border:1px solid #0006}
+  #cam canvas{width:100%;display:block}
+  .overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+    background:rgba(5,3,2,.82);text-align:center;padding:20px}
+  .overlay h2{font-family:Cinzel,serif;margin:0;font-size:30px;letter-spacing:.15em}
+  .overlay p{margin:0;color:#cbbd9f;max-width:520px;line-height:1.5;font-size:14px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;width:100%;max-width:560px}
+  input{flex:1;min-width:220px;padding:10px 12px;border-radius:8px;border:1px solid #3d3020;background:#140f0a;color:var(--ink)}
+  button{padding:10px 18px;border-radius:8px;border:0;background:var(--glow);color:#1a1006;font-weight:700;cursor:pointer;font-size:14px}
+  button.ghost{background:transparent;color:var(--ink);border:1px solid #4a3a26}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;width:min(820px,calc(100vw - 32px));margin:14px 0 30px}
+  .chip{background:#15100b;border:1px solid #2c2216;border-radius:20px;padding:6px 12px;font-size:13px;color:#cbbd9f}
+  .chip b{color:var(--ink)}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<h1>LANTERN SHADOWS</h1>
+<div class="tag">The lantern keeps the night away. Spirits drift toward the flame — cast their shadow before they reach it.</div>
+
+<div class="stage" id="stage">
+  <div id="light"></div>
+  <div id="spirit"></div>
+  <div id="cast"></div>
+  <div class="grain"></div>
+  <div class="hud">
+    <div><div class="big" id="score">0</div><div id="combo"></div></div>
+    <div style="text-align:right"><div id="lives"></div><div id="level"></div><div id="seeing" style="font-size:12px;opacity:.75"></div></div>
+  </div>
+  <div id="prompt"></div>
+  <div id="hint"></div>
+  <div id="timer"></div>
+  <div id="toast"></div>
+  <div id="cam"></div>
+
+  <div class="overlay" id="menu">
+    <h2>LIGHT THE LANTERN</h2>
+    <p>A spirit appears in the dark. Make its hand shadow and hold it until the shadow is cast.
+       Too slow, and the flame flickers. Lose three flames and the night wins.</p>
+    <div class="row">
+      <input id="url" value="https://teachablemachine.withgoogle.com/models/5wNvyhI--/">
+    </div>
+    <div class="row">
+      <button id="play">Play with camera</button>
+      <button id="demo" class="ghost">Keyboard demo (1–6)</button>
+    </div>
+    <p id="status"></p>
+  </div>
+
+  <div class="overlay hidden" id="over">
+    <h2>THE NIGHT WINS</h2>
+    <p id="final"></p>
+    <div class="row"><button id="again">Light it again</button></div>
+  </div>
+</div>
+
+<div class="legend" id="legend"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.5/dist/teachablemachine-image.min.js"></script>
+<script>
+// Teachable Machine class name -> spirit
+const SPIRITS = {
+  dog:     {emoji:"🐕", name:"Hound",     tone:[220,170]},
+  bird:    {emoji:"🕊️", name:"Dove",      tone:[1500,2000,1700]},
+  owl:     {emoji:"🦉", name:"Owl",       tone:[420,310]},
+  peace:   {emoji:"🐇", name:"Rabbit",    tone:[880,1320]},
+  fist:    {emoji:"🐌", name:"Snail",     tone:[260,330]},
+  palm:    {emoji:"🦋", name:"Butterfly", tone:[1200,1600,1200,1600]},
+};
+const IGNORE = ["background","none","nothing","empty","背景"];
+const CONF = 0.5;      // smoothed confidence needed (the target just has to be the clear top guess)
+const HOLD = 0.3;      // seconds to hold the pose
+const LIVES = 3;
+
+const $ = id => document.getElementById(id);
+let model=null, webcam=null, roster=[], actx=null;
+let ema={}, held=0, keyOverride=null, keyUntil=0;
+let state="menu", cur=null, score=0, combo=0, lives=LIVES, caught=0, last=0;
+
+function lookup(cls){
+  const n = cls.trim().toLowerCase();
+  if (SPIRITS[n]) return SPIRITS[n];
+  const k = Object.keys(SPIRITS).sort((a,b)=>b.length-a.length).find(k=>n.includes(k));
+  return k ? SPIRITS[k] : {emoji:"✋", name:cls, tone:[600,800]};
+}
+function buildRoster(labels){
+  roster = labels.filter(l=>!IGNORE.some(i=>l.toLowerCase().includes(i)))
+                 .map((cls,i)=>({cls, key:i+1, ...lookup(cls)}));
+  $("legend").innerHTML = roster.map(r=>`<span class="chip">${r.emoji} <b>${r.name}</b> ← ${r.cls}${model?"":` (key ${r.key})`}</span>`).join("");
+}
+
+// ---------- input ----------
+async function predictLoop(){
+  if (!model) return;
+  webcam.update();
+  const preds = await model.predict(webcam.canvas);
+  // smooth each class over a few frames so one jittery frame doesn't reset the pose
+  preds.forEach(p=>{ ema[p.className] = (ema[p.className]||0)*0.6 + p.probability*0.4; });
+  requestAnimationFrame(predictLoop);
+}
+function topGuess(){
+  let best=null; for (const k in ema) if (!best || ema[k]>ema[best]) best=k;
+  return best ? [best, ema[best]] : [null,0];
+}
+addEventListener("keydown", e=>{
+  const r = roster.find(r=>String(r.key)===e.key);
+  if (r){ keyOverride=r.cls; keyUntil=performance.now()+400; }
+});
+
+// ---------- game ----------
+function speed(){ return Math.max(2.4, 6 - caught*0.18); }   // seconds a spirit takes to reach the flame
+function nextSpirit(){
+  let pick; do { pick = roster[Math.floor(Math.random()*roster.length)]; } while (roster.length>1 && cur && pick.cls===cur.cls);
+  cur = {...pick, t:0, T:speed()};
+  const s=$("spirit"); s.textContent=pick.emoji;
+  $("prompt").textContent = `A ${pick.name.toUpperCase()} approaches`;
+  $("hint").textContent = caught < 8 ? `make: ${pick.cls}` : "";   // hints fade after 8 catches
+  $("cast").classList.remove("on");
+}
+function start(){
+  score=0; combo=0; lives=LIVES; caught=0; cur=null;
+  $("menu").classList.add("hidden"); $("over").classList.add("hidden");
+  state="play"; hud(); nextSpirit(); last=performance.now(); requestAnimationFrame(tick);
+}
+function tick(now){
+  if (state!=="play") return;
+  const dt=(now-last)/1000; last=now;
+  if (!model) roster.forEach(r=>{ ema[r.cls] = (now<keyUntil && r.cls===keyOverride) ? 1 : 0; });
+  const [guess, conf] = topGuess();
+  $("seeing").textContent = guess ? `seeing: ${guess} ${Math.round(conf*100)}%` : "";
+  if (guess===cur.cls && conf>=CONF) held += dt; else held = 0;
+
+  cur.t += dt;
+  const p = Math.min(cur.t/cur.T,1);
+  const s=$("spirit");
+  s.style.opacity = 0.15 + p*0.6;
+  s.style.transform = `translate(-50%,-50%) scale(${0.3+p*0.9}) rotate(${Math.sin(now/300)*4}deg)`;
+  $("timer").style.width = ((1-p)*100)+"%";
+
+  if (held>=HOLD) return catchIt();
+  if (p>=1) return miss();
+  requestAnimationFrame(tick);
+}
+function catchIt(){
+  caught++; combo++;
+  const pts = Math.round(100 * (1 + (1-cur.t/cur.T)) * Math.min(combo,5));
+  score += pts;
+  const c=$("cast"); c.textContent=cur.emoji; c.classList.add("on");
+  $("spirit").style.opacity=0;
+  toast(combo>2?`+${pts}  ×${Math.min(combo,5)}`:`+${pts}`);
+  chirp(cur.tone); hud(); pause(900);
+}
+function miss(){
+  lives--; combo=0;
+  $("stage").classList.remove("flicker"); void $("stage").offsetWidth; $("stage").classList.add("flicker");
+  toast("The flame flickers…"); chirp([140,90],"sawtooth"); hud();
+  if (lives<=0) return end();
+  pause(1000);
+}
+function pause(ms){
+  state="pause"; held=0;
+  setTimeout(()=>{ if(state!=="pause")return; state="play"; nextSpirit(); last=performance.now(); requestAnimationFrame(tick); }, ms);
+}
+function end(){
+  state="over";
+  let best=0; try{ best=+localStorage.getItem("lanternBest")||0; if(score>best){localStorage.setItem("lanternBest",score); best=score;} }catch(e){}
+  $("final").innerHTML = `You banished <b>${caught}</b> spirits.<br>Score <b>${score}</b> · Best <b>${best}</b>`;
+  setTimeout(()=>$("over").classList.remove("hidden"),900);
+}
+function hud(){
+  $("score").textContent=score;
+  $("combo").textContent = combo>1 ? `combo ×${Math.min(combo,5)}` : "";
+  $("lives").textContent = "🕯️".repeat(lives) + "🌑".repeat(LIVES-lives);
+  $("level").textContent = `banished ${caught}`;
+}
+function toast(t){ const el=$("toast"); el.textContent=t; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); setTimeout(()=>el.classList.remove("show"),700); }
+function chirp(freqs,type="triangle"){
+  if(!actx) return; let t=actx.currentTime;
+  freqs.forEach(f=>{ const o=actx.createOscillator(), g=actx.createGain(); o.type=type; o.frequency.value=f;
+    g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.22,t+.02); g.gain.exponentialRampToValueAtTime(.0001,t+.2);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t+.22); t+=.12; });
+}
+
+// ---------- menu ----------
+$("play").onclick = async ()=>{
+  actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+  let url=$("url").value.trim(); if(!url.endsWith("/")) url+="/";
+  $("status").textContent="Loading model…";
+  try{
+    model = await tmImage.load(url+"model.json", url+"metadata.json");
+    webcam = new tmImage.Webcam(320,240,true); await webcam.setup(); await webcam.play();
+    $("cam").innerHTML=""; $("cam").appendChild(webcam.canvas);
+    buildRoster(model.getClassLabels().filter(l=>!/peacock/i.test(l))); predictLoop(); start();
+  }catch(e){ console.error(e); $("status").textContent="Couldn't load — check the link and allow the camera."; }
+};
+$("demo").onclick = ()=>{
+  actx = actx || new (window.AudioContext||window.webkitAudioContext)();
+  model=null; buildRoster(Object.keys(SPIRITS)); start();
+};
+$("again").onclick = start;
+buildRoster(Object.keys(SPIRITS)); hud();
+</script>
+</body>
+</html>
