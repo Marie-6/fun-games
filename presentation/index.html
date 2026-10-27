@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Off The Table: presentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&amp;display=swap"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&amp;display=swap">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0f0c16;overflow:hidden;font-family:Outfit,system-ui,sans-serif}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:0 0}
+#stage>section{position:absolute;inset:0;width:1920px;height:1080px;overflow:hidden;opacity:0;visibility:hidden;transition:opacity .35s}
+#stage>section.on{opacity:1;visibility:visible}
+section h1,section h2,section h3,section p,section ul,section ol,section table{margin:0}
+section a{color:inherit}
+section aside{display:none}
+#bar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:12px;align-items:center;justify-content:center;padding:10px;color:#c9bfd6;font-size:14px;opacity:.0;transition:opacity .3s}
+body:hover #bar{opacity:1}
+#bar button{background:#2a2340;color:#fff4dc;border:1px solid #4a4060;border-radius:8px;padding:6px 12px;font:inherit;cursor:pointer}
+#notes{position:fixed;left:16px;right:16px;bottom:56px;max-height:30vh;overflow:auto;background:#fff4dc;color:#1b1626;border-radius:12px;padding:16px 20px;font-size:18px;line-height:1.5;display:none}
+body.shownotes #notes{display:block}
+</style></head><body>
+<div id="stage">
+<section id="cover" style="display:grid; gap:72px; align-items:center; grid-template-columns:760px 1fr; padding:128px; background:#1b1626">
+  <div style="display:flex; flex-direction:column; gap:32px">
+    <p style="font-family:Outfit, sans-serif; font-size:28px; font-weight:600; letter-spacing:4px; color:#ff7aa2">MODALITY: ARMS &amp; HANDS</p>
+    <h1 style="font-family:'Bagel Fat One', sans-serif; font-size:136px; font-weight:400; line-height:1; color:#e8a33d">Off The Table</h1>
+    <p style="font-family:Outfit, sans-serif; font-size:44px; line-height:1.3; color:#fff4dc">You are a cat. Knock the humans' nice things off the table with your hand, and don't get caught.</p>
+    <p style="font-family:Outfit, sans-serif; font-size:28px; color:#c9bfd6">Marie &nbsp;<a href="https://marie-6.github.io/fun-games/"><span style="color:#9fdcff">marie-6.github.io/fun-games</span></a></p>
+  </div>
+  <img src="img/gameplay-reach.png" alt="Off The Table gameplay: the cat's long arm reaches onto a table with mugs, a wine glass and books" style="width:832px; height:540px; border:6px solid #e8a33d; border-radius:24px">
+  <aside>Hi, I'm Marie. My game is called Off The Table. You play a cat whose only goal in life is to knock the humans' nice things onto the floor. You control the cat's paw with your own hand through the webcam. Feel free to open the link and play along.</aside>
+</section>
+<section id="modality" data-transition="fade" style="display:flex; flex-direction:column; gap:48px; justify-content:space-between; padding:128px; background:#2b5d6b">
+  <div style="display:flex; flex-direction:column; gap:24px">
+    <p style="font-family:Outfit, sans-serif; font-size:28px; font-weight:600; letter-spacing:4px; color:#ffd98a">THE MODALITY</p>
+    <h2 style="font-family:'Bagel Fat One', sans-serif; font-size:96px; font-weight:400; line-height:1.1; color:#fff4dc">I picked arms &amp; hands</h2>
+    <p style="width:1400px; font-family:Outfit, sans-serif; font-size:36px; line-height:1.35; color:#fff4dc">Your hand becomes the cat's paw. Webcam hand tracking reads your hands, and the camera image is never shown. Right- or left-handed, you choose.</p>
+  </div>
+  <div style="display:grid; gap:32px; grid-template-columns:1fr 1fr 1fr 1fr">
+    <div style="display:flex; flex-direction:column; gap:12px; padding:36px; background:#1b1626; border:4px solid #e8a33d; border-radius:20px">
+      <h3 style="font-family:Outfit, sans-serif; font-size:36px; font-weight:800; color:#e8a33d">Hand open</h3>
+      <p style="font-family:Outfit, sans-serif; font-size:28px; line-height:1.35; color:#fff4dc">Hold it at chest height (the table) to put the paw out.</p>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:12px; padding:36px; background:#1b1626; border:4px solid #e8a33d; border-radius:20px">
+      <h3 style="font-family:Outfit, sans-serif; font-size:36px; font-weight:800; color:#e8a33d">Sweep sideways</h3>
+      <p style="font-family:Outfit, sans-serif; font-size:28px; line-height:1.35; color:#fff4dc">The paw follows your hand and swipes things off.</p>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:12px; padding:36px; background:#1b1626; border:4px solid #e8a33d; border-radius:20px">
+      <h3 style="font-family:Outfit, sans-serif; font-size:36px; font-weight:800; color:#e8a33d">Drop it</h3>
+      <p style="font-family:Outfit, sans-serif; font-size:28px; line-height:1.35; color:#fff4dc">Hand out of view: act innocent. Nothing to see here.</p>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:12px; padding:36px; background:#1b1626; border:4px solid #ff7aa2; border-radius:20px">
+      <h3 style="font-family:Outfit, sans-serif; font-size:36px; font-weight:800; color:#ff7aa2">Fist or open mouth</h3>
+      <p style="font-family:Outfit, sans-serif; font-size:28px; line-height:1.35; color:#fff4dc">Meow with your other fist, or open wide. Cute if they're watching.</p>
+    </div>
+  </div>
+  <aside>I chose arms and hands. Using webcam hand tracking, the game watches both of your hands. You pick right- or left-handed first. An open hand at chest height puts the paw out, sweeping sideways swipes, and dropping the hand out of view is acting innocent. Your other hand makes a fist to meow, or you can just open your mouth wide. I deliberately never show the camera image: only the cat's paw moves on screen.</aside>
+</section>
+<section id="why" data-transition="fade" style="background:#fff4dc;color:#1b1626;font-family:Outfit, system-ui, sans-serif;padding:128px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:24px">
+<p style="font-size:28px;font-weight:600;color:#5e3552;letter-spacing:4px">WHY ARMS</p>
+<h2 style="font-family:'Bagel Fat One', Outfit, sans-serif;font-size:80px;font-weight:400;line-height:1.1">A cat's swipe is already an arm gesture.</h2>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:48px">
+<div style="display:flex;flex-direction:column;gap:16px;border-top:6px solid #e8a33d;padding-top:28px">
+<h3 style="font-size:40px;font-weight:800">It maps 1:1</h3>
+<p style="font-size:30px;line-height:1.4">Reach out, swipe, pull back. Players don't need to learn a control, they just do what a cat does.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px;border-top:6px solid #e8a33d;padding-top:28px">
+<h3 style="font-size:40px;font-weight:800">Guilt is physical</h3>
+<p style="font-size:30px;line-height:1.4">Freezing when the door opens is funnier when your whole arm has to drop and go still.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:16px;border-top:6px solid #e8a33d;padding-top:28px">
+<h3 style="font-size:40px;font-weight:800">Works at a desk</h3>
+<p style="font-size:30px;line-height:1.4">Hand tracking works sitting at a laptop. Your arm does the sweep, your hand tells the game what you mean.</p>
+</div>
+</div>
+<aside>[Edit into your own words.] Why arms interested me: the cat's swipe is literally an arm motion, so the control explains itself. The comedy of the game is the guilty freeze, and that freeze becomes real when your body has to stop. And hand tracking works when you're sitting at a laptop: the arm makes the big sweep, and the hand (open or fist) says what you mean.</aside>
+</section>
+<section id="ui" data-transition="fade" style="background:#1b1626;color:#fff4dc;font-family:Outfit, system-ui, sans-serif;padding:128px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:24px">
+<p style="font-size:28px;font-weight:600;color:#ff7aa2;letter-spacing:4px">USER INTERFACE</p>
+<h2 style="font-family:'Bagel Fat One', Outfit, sans-serif;font-size:80px;font-weight:400;line-height:1.1;color:#e8a33d">How arms shaped the interface</h2>
+</div>
+<div style="display:grid;grid-template-columns:840px 1fr;gap:64px;align-items:start">
+<img src="img/gameplay-combo.png" alt="Gameplay: the cat's stretchy arm swipes across the table, combo x4 meter and +120 points" style="width:840px;height:545px;object-fit:cover;border-radius:20px;border:4px solid #e8a33d">
+<div style="display:flex;flex-direction:column;gap:28px">
+<div style="display:flex;flex-direction:column;gap:6px">
+<h3 style="font-size:34px;font-weight:800;color:#ffd98a">A paw as long as your arm</h3>
+<p style="font-size:28px;line-height:1.35">The paw stretches from the cat to your hand, mirrored, so you see your arm in the cat.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<h3 style="font-size:34px;font-weight:800;color:#ffd98a">Readable from a step back</h3>
+<p style="font-size:28px;line-height:1.35">Thick outlines, big objects, few colors.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<h3 style="font-size:34px;font-weight:800;color:#ffd98a">Warnings you can hear</h3>
+<p style="font-size:28px;line-height:1.35">Your eyes are on the paw, so footsteps warn you before the door opens.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<h3 style="font-size:34px;font-weight:800;color:#ffd98a">Rules, not a video</h3>
+<p style="font-size:28px;line-height:1.35">No camera feed on screen. One card explains every gesture first.</p>
+</div>
+</div>
+</div>
+<aside>For the interface: the paw is drawn as a long stretchy arm that follows your hand, mirrored like a mirror, so your movement and the cat's feel like one. The art is a chunky poster style so it's readable even if you lean back from the laptop. Because your eyes are on your paw, the footsteps sound is the warning before the door opens. And since I don't show the camera, one card explains every gesture before you start.</aside>
+</section>
+<section id="process" data-transition="fade" style="background:#fff4dc;color:#1b1626;font-family:Outfit, system-ui, sans-serif;padding:128px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:24px">
+<p style="font-size:28px;font-weight:600;color:#5e3552;letter-spacing:4px">PROCESS</p>
+<h2 style="font-family:'Bagel Fat One', Outfit, sans-serif;font-size:80px;font-weight:400;line-height:1.1">From a mouse click to your hands</h2>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px">
+<div style="display:flex;flex-direction:column;gap:12px;background:#ffffff;padding:36px;border-radius:20px;border:3px solid #1b1626">
+<p style="font-family:'Bagel Fat One', Outfit, sans-serif;font-size:48px;color:#5e3552">1</p>
+<h3 style="font-size:34px;font-weight:800">Idea and sketches</h3>
+<p style="font-size:28px;line-height:1.35">[Add your sketches: the cat, the room, the arm poses.]</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#ffffff;padding:36px;border-radius:20px;border:3px solid #1b1626">
+<p style="font-family:'Bagel Fat One', Outfit, sans-serif;font-size:48px;color:#5e3552">2</p>
+<h3 style="font-size:34px;font-weight:800">Core loop with a mouse</h3>
+<p style="font-size:28px;line-height:1.35">Hold = paw out, let go = innocent. Footsteps, door, combos.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#ffffff;padding:36px;border-radius:20px;border:3px solid #1b1626">
+<p style="font-family:'Bagel Fat One', Outfit, sans-serif;font-size:48px;color:#5e3552">3</p>
+<h3 style="font-size:34px;font-weight:800">Arms, then hands</h3>
+<p style="font-size:28px;line-height:1.35">Pose tracking needed elbows in view. Hand tracking works sitting close.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#ffffff;padding:36px;border-radius:20px;border:3px solid #1b1626">
+<p style="font-family:'Bagel Fat One', Outfit, sans-serif;font-size:48px;color:#5e3552">4</p>
+<h3 style="font-size:34px;font-weight:800">Fix: the sticky paw</h3>
+<p style="font-size:28px;line-height:1.35">The paw stayed out after letting go. Now it drops instantly.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#ffffff;padding:36px;border-radius:20px;border:3px solid #1b1626">
+<p style="font-family:'Bagel Fat One', Outfit, sans-serif;font-size:48px;color:#5e3552">5</p>
+<h3 style="font-size:34px;font-weight:800">Phone as controller</h3>
+<p style="font-size:28px;line-height:1.35">A relay so it works on any network. Lift your finger to freeze.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:12px;background:#ffffff;padding:36px;border-radius:20px;border:3px solid #1b1626">
+<p style="font-family:'Bagel Fat One', Outfit, sans-serif;font-size:48px;color:#5e3552">6</p>
+<h3 style="font-size:34px;font-weight:800">Camera round 2</h3>
+<p style="font-size:28px;line-height:1.35">Rules first, left or right hand, fist or open mouth to meow.</p>
+</div>
+</div>
+<aside>[Add your sketches to step 1, or insert a slide of photos before this one.] My process: I started from the idea and sketches, then built the core loop with a mouse so I could test the rules quickly. Then I added arm control using MediaPipe pose tracking, but it needed your elbows in view, which is hard sitting at a laptop, so I switched to hand tracking. Playtesting showed the paw sometimes stayed out after letting go, which got you caught unfairly, so I fixed that. I added a phone controller through a relay. Then a second round on the camera: rules before you start, a right- or left-handed choice, and meowing with a fist or an open mouth.</aside>
+</section>
+<section id="designs" data-transition="fade" style="background:#2b5d6b;color:#fff4dc;font-family:Outfit, system-ui, sans-serif;padding:128px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:24px">
+<p style="font-size:28px;font-weight:600;color:#ffd98a;letter-spacing:4px">DESIGNS</p>
+<h2 style="font-family:'Bagel Fat One', Outfit, sans-serif;font-size:80px;font-weight:400;line-height:1.1">The screens</h2>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:48px">
+<div style="display:flex;flex-direction:column;gap:20px">
+<img src="img/title-screen.png" alt="Title screen: You are a cat, with the rules and a Be a cat button" style="width:808px;height:506px;object-fit:cover;border-radius:20px;border:4px solid #1b1626">
+<p style="font-size:28px;line-height:1.35"><b>Onboarding.</b> Four rules, one button. The tone is set in the first line.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:20px">
+<img src="img/gameplay-combo.png" alt="Gameplay: a swipe chain with a combo x4 meter" style="width:808px;height:506px;object-fit:cover;border-radius:20px;border:4px solid #1b1626">
+<p style="font-size:28px;line-height:1.35"><b>Play.</b> Chain crashes fast for combo points, before the door opens.</p>
+</div>
+</div>
+<aside>Here are the two main screens. The title screen explains everything in four lines and one button. In play, chaining crashes quickly builds a combo, which rewards big confident arm sweeps, right up until you hear footsteps.</aside>
+</section>
+<section id="camera" data-transition="fade" style="background:#1b1626;color:#fff4dc;font-family:Outfit, system-ui, sans-serif;padding:128px;display:flex;flex-direction:column;gap:48px">
+<div style="display:flex;flex-direction:column;gap:24px">
+<p style="font-size:28px;font-weight:600;color:#ff7aa2;letter-spacing:4px">ITERATION</p>
+<h2 style="font-family:'Bagel Fat One', Outfit, sans-serif;font-size:80px;font-weight:400;line-height:1.1;color:#e8a33d">Getting the camera right</h2>
+</div>
+<div style="display:grid;grid-template-columns:840px 1fr;gap:64px;align-items:start">
+<img src="img/hand-controls.png" alt="The Play with your hands screen: right-handed or left-handed buttons and every hand gesture explained before starting" style="width:840px;height:526px;object-fit:cover;border-radius:20px;border:4px solid #e8a33d">
+<div style="display:flex;flex-direction:column;gap:28px">
+<div style="display:flex;flex-direction:column;gap:6px">
+<h3 style="font-size:34px;font-weight:800;color:#ffd98a">Explain first, then play</h3>
+<p style="font-size:28px;line-height:1.35">Every gesture is on one screen before the camera game starts.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<h3 style="font-size:34px;font-weight:800;color:#ffd98a">Right- or left-handed</h3>
+<p style="font-size:28px;line-height:1.35">Pick which hand swipes. The other hand only meows.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<h3 style="font-size:34px;font-weight:800;color:#ffd98a">Two ways to meow</h3>
+<p style="font-size:28px;line-height:1.35">Raise your other fist, or open your mouth wide.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<h3 style="font-size:34px;font-weight:800;color:#ffd98a">Steadier tracking</h3>
+<p style="font-size:28px;line-height:1.35">No more paw popping out while you act innocent, or flicker.</p>
+</div>
+</div>
+</div>
+<aside>[Edit into your own words.] After the first version, I reworked the camera controls. Now the game explains every gesture on one screen before you start, and asks whether you're right- or left-handed: one hand swipes, the other only meows, so meowing never moves the paw by accident. You can meow by raising your other fist, or just by opening your mouth wide. I also fixed tracking bugs: the paw popping out while you were acting innocent, and flicker. The camera image is still never shown.</aside>
+</section>
+<section id="next" data-transition="fade" style="background:#fff4dc;color:#1b1626;font-family:Outfit, system-ui, sans-serif;padding:128px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:24px">
+<p style="font-size:28px;font-weight:600;color:#5e3552;letter-spacing:4px">WITH MORE TIME</p>
+<h2 style="font-family:'Bagel Fat One', Outfit, sans-serif;font-size:80px;font-weight:400;line-height:1.1">What I'd work on next</h2>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:32px 64px">
+<div style="display:flex;flex-direction:column;gap:10px;border-left:6px solid #e8a33d;padding-left:28px">
+<h3 style="font-size:38px;font-weight:800">Calibration</h3>
+<p style="font-size:30px;line-height:1.4">A quick "show me your reach" step so tall, short, sitting and standing players all reach the whole table.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;border-left:6px solid #e8a33d;padding-left:28px">
+<h3 style="font-size:38px;font-weight:800">Smoother tracking</h3>
+<p style="font-size:30px;line-height:1.4">Filter the jitter so a shaky but frozen arm doesn't read as moving.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;border-left:6px solid #e8a33d;padding-left:28px">
+<h3 style="font-size:38px;font-weight:800">More cat moves</h3>
+<p style="font-size:30px;line-height:1.4">A two-handed push, a slow nudge to the edge, a tail flick, each its own arm gesture.</p>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;border-left:6px solid #e8a33d;padding-left:28px">
+<h3 style="font-size:38px;font-weight:800">Playtesting with arms</h3>
+<p style="font-size:30px;line-height:1.4">Watch more people play to tune difficulty and how long a round should last.</p>
+</div>
+</div>
+<aside>[Edit to match your own plans.] With more time I'd add a calibration step for different body sizes and seating positions, smooth out tracking jitter, design more arm gestures for different cat moves, and run more playtests specifically with arm control.</aside>
+</section>
+<section id="questions" data-transition="fade" style="background:#1b1626;color:#fff4dc;font-family:Outfit, system-ui, sans-serif;padding:128px;display:flex;flex-direction:column;gap:56px">
+<div style="display:flex;flex-direction:column;gap:24px">
+<p style="font-size:28px;font-weight:600;color:#ff7aa2;letter-spacing:4px">OPEN QUESTIONS</p>
+<h2 style="font-family:'Bagel Fat One', Outfit, sans-serif;font-size:80px;font-weight:400;line-height:1.1;color:#e8a33d">What I'm still wondering</h2>
+</div>
+<div style="display:flex;flex-direction:column;gap:36px">
+<p style="font-size:40px;line-height:1.35"><span style="color:#ffd98a;font-weight:800">01</span>  Is the arm actually more fun than the mouse, or just more tiring?</p>
+<p style="font-size:40px;line-height:1.35"><span style="color:#ffd98a;font-weight:800">02</span>  Without the camera feed, do players understand why tracking lost them?</p>
+<p style="font-size:40px;line-height:1.35"><span style="color:#ffd98a;font-weight:800">03</span>  Fist or open mouth to meow: which one do people actually use?</p>
+<p style="font-size:40px;line-height:1.35"><span style="color:#ffd98a;font-weight:800">04</span>  How long can someone play before their arm gives up?</p>
+</div>
+<aside>[Edit to your own questions.] These are the things I haven't resolved yet: whether arm control is genuinely more fun than the mouse, whether hiding the camera makes tracking failures confusing, which of the two meows people prefer, and how long a comfortable session is.</aside>
+</section>
+</div>
+<div id="notes"></div>
+<div id="bar"><button id="prev" aria-label="Previous slide">&larr;</button><span id="count"></span><button id="next" aria-label="Next slide">&rarr;</button><button id="nb">Notes (N)</button><button id="fs">Full screen (F)</button><a href="../" style="color:#9fdcff">Play the game</a></div>
+<script>
+const S=[...document.querySelectorAll('#stage>section')],st=document.getElementById('stage');let i=0;
+function fit(){const k=Math.min(innerWidth/1920,innerHeight/1080);st.style.transform=`scale(${k}) translate(-50%,-50%)`;st.style.transformOrigin='0 0';st.style.left='50%';st.style.top='50%';st.style.transform=`translate(-50%,-50%) scale(${k})`;st.style.transformOrigin='center center'}
+function go(n){i=Math.max(0,Math.min(S.length-1,n));S.forEach((s,k)=>s.classList.toggle('on',k===i));
+  document.getElementById('count').textContent=(i+1)+' / '+S.length;
+  const a=S[i].querySelector('aside');document.getElementById('notes').textContent=a?a.textContent:'(no notes)';
+  history.replaceState(null,'','#'+(i+1))}
+addEventListener('resize',fit);fit();
+go((parseInt(location.hash.slice(1))||1)-1);
+addEventListener('keydown',e=>{if(['ArrowRight','PageDown',' ','Enter'].includes(e.key)){e.preventDefault();go(i+1)}
+  else if(['ArrowLeft','PageUp','Backspace'].includes(e.key)){e.preventDefault();go(i-1)}
+  else if(e.key==='Home')go(0);else if(e.key==='End')go(S.length-1);
+  else if(e.key==='n'||e.key==='N')document.body.classList.toggle('shownotes');
+  else if(e.key==='f'||e.key==='F')toggleFs()});
+function toggleFs(){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen().catch(()=>{})}
+document.getElementById('prev').onclick=()=>go(i-1);document.getElementById('next').onclick=()=>go(i+1);
+document.getElementById('nb').onclick=()=>document.body.classList.toggle('shownotes');document.getElementById('fs').onclick=toggleFs;
+st.addEventListener('click',e=>{if(e.target.closest('a'))return;go(e.clientX>innerWidth/3?i+1:i-1)});
+let tx=null;addEventListener('touchstart',e=>tx=e.touches[0].clientX);addEventListener('touchend',e=>{if(tx==null)return;const d=e.changedTouches[0].clientX-tx;if(Math.abs(d)>40)go(d<0?i+1:i-1);tx=null});
+</script>
+</body></html>
