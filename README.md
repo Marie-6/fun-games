@@ -16,3 +16,6 @@ Spirits drift toward the lantern. Make their hand shadow before they reach the f
 Play: https://marie-6.github.io/fun-games/lantern-shadows/
 
 Controls: hand gestures via webcam, recognized by a Teachable Machine image model. There is also a keyboard demo (keys 1–6).
+
+Links for teachable machines:https://teachablemachine.withgoogle.com/models/5wNvyhI--/
+
