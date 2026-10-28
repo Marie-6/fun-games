@@ -19,3 +19,9 @@ Controls: hand gestures via webcam, recognized by a Teachable Machine image mode
 
 Links for teachable machines:https://teachablemachine.withgoogle.com/models/5wNvyhI--/
 
+## Mothlight
+You are the last lantern in the garden. Drink oil to stay lit and keep away from the moths.
+
+Play: https://marie-6.github.io/fun-games/mothlight/
+
+Controls: W A S D only. Double-tap any of them to dash.

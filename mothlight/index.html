@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mothlight</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik+Mono+One&family=Martian+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one full-bleed night field; HUD floats top, a single title card centers over the canvas. Deliberately single-theme (night). */
+:root {
+  --night: #0b0a12;
+  --ink: #ece6f7;
+  --dim: #8d86a3;
+  --flame: #ffc46b;
+  --oil: #ffe39a;
+  --wing: #b9b0d6;
+  --danger: #ff6b5e;
+  --panel: rgba(18, 16, 30, 0.72);
+  --display: "Rubik Mono One", "Arial Black", Impact, sans-serif;
+  --mono: "Martian Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; }
+[hidden] { display: none !important; }
+body { background: var(--night); color: var(--ink); font-family: var(--mono); overflow: hidden; user-select: none; -webkit-user-select: none; }
+.stage { position: relative; height: 100%; }
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.hud {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px;
+  padding-block: 14px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.meter { display: flex; align-items: center; gap: 10px; }
+.bar { width: clamp(90px, 22vw, 200px); height: 8px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 100%; background: var(--flame); box-shadow: 0 0 12px var(--flame); transition: background 0.2s; }
+.bar.low i { background: var(--danger); box-shadow: 0 0 12px var(--danger); }
+.stat b { color: var(--ink); font-weight: 600; }
+.stat { color: var(--dim); }
+.dash { padding: 3px 8px; border-radius: 999px; border: 1px solid var(--dim); color: var(--dim); }
+.dash.ready { border-color: var(--flame); color: var(--flame); }
+
+.card {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(440px, calc(100% - 32px));
+  padding: 28px 26px; border-radius: 6px;
+  background: var(--panel); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 196, 107, 0.25);
+  display: flex; flex-direction: column; gap: 14px; text-align: left;
+}
+.card h1 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(30px, 8vw, 44px); line-height: 1; color: var(--flame); text-shadow: 0 0 24px rgba(255,196,107,0.45); text-wrap: balance; }
+.card p { margin: 0; font-size: 12.5px; line-height: 1.7; color: var(--ink); }
+.card .sub { color: var(--dim); }
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; align-items: center; font-size: 12px; }
+.keycap { display: inline-flex; gap: 4px; }
+.keycap kbd { font-family: var(--mono); font-weight: 600; min-width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 4px; border: 1px solid var(--dim); border-bottom-width: 2px; color: var(--ink); font-size: 11px; }
+.go { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--flame); animation: blink 1.4s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: 0.35; } }
+
+.pad { position: absolute; bottom: max(18px, env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); display: none; grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(2, 58px); gap: 8px; }
+.pad button { font-family: var(--mono); font-weight: 600; font-size: 18px; color: var(--ink); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); border-radius: 10px; touch-action: none; }
+.pad button.on { background: rgba(255,196,107,0.25); border-color: var(--flame); }
+.pad [data-k="w"] { grid-column: 2; grid-row: 1; }
+.pad [data-k="a"] { grid-column: 1; grid-row: 2; }
+.pad [data-k="s"] { grid-column: 2; grid-row: 2; }
+.pad [data-k="d"] { grid-column: 3; grid-row: 2; }
+@media (pointer: coarse) { .pad { display: grid; } }
+@media (prefers-reduced-motion: reduce) { .go { animation: none; } }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <canvas id="game"></canvas>
+
+  <div class="hud">
+    <div class="meter"><span class="stat">Light</span><div class="bar" id="bar"><i id="barFill"></i></div></div>
+    <span class="stat">Oil <b id="oil">0</b></span>
+    <span class="stat">Time <b id="time">0:00</b></span>
+    <span class="stat">Best <b id="best">0</b></span>
+    <span class="dash ready" id="dash">Dash ready</span>
+  </div>
+
+  <div class="card" id="card">
+    <h1 id="cardTitle">Mothlight</h1>
+    <p id="cardText">You are the last lantern in the garden. Your flame burns down every second. Drink the oil drops to keep it lit, and keep away from the moths. The brighter you burn, the faster they come.</p>
+    <div class="keys" id="cardKeys">
+      <span class="keycap"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Move</span>
+      <span class="keycap"><kbd>D</kbd><kbd>D</kbd></span><span>Double-tap any key to dash. The flash scatters moths.</span>
+    </div>
+    <p class="sub">Those four keys are the whole game. Nothing else does anything.</p>
+    <div class="go" id="cardGo">Press W, A, S or D to light the lantern</div>
+  </div>
+
+  <div class="pad" id="pad">
+    <button data-k="w" aria-label="W">W</button>
+    <button data-k="a" aria-label="A">A</button>
+    <button data-k="s" aria-label="S">S</button>
+    <button data-k="d" aria-label="D">D</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cvs = document.getElementById('game');
+  const ctx = cvs.getContext('2d');
+  const $ = id => document.getElementById(id);
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let W = 0, H = 0, DPR = 1, ground = [];
+  function resize() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = cvs.clientWidth; H = cvs.clientHeight;
+    cvs.width = Math.round(W * DPR); cvs.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ground = [];
+    const n = Math.round(W * H / 2600);
+    for (let i = 0; i < n; i++) ground.push({ x: Math.random() * W, y: Math.random() * H, h: 3 + Math.random() * 7, lean: (Math.random() - 0.5) * 4, stone: Math.random() < 0.12 });
+    if (player) { player.x = Math.min(player.x, W - 12); player.y = Math.min(player.y, H - 12); }
+  }
+
+  // ---- state ----
+  let state = 'title';        // title | play | over
+  let canStartAt = 0;
+  let player, moths, drops, parts, elapsed, score, light, dashCd, spawnT, shake;
+  let best = 0;
+  try { best = +localStorage.getItem('mothlight-best') || 0; } catch (e) {}
+  $('best').textContent = best;
+
+  const DIRS = { w: [0, -1], a: [-1, 0], s: [0, 1], d: [1, 0] };
+  const held = { w: 0, a: 0, s: 0, d: 0 };
+  const lastTap = { w: 0, a: 0, s: 0, d: 0 };
+  const DASH_CD = 2.5;
+
+  function reset() {
+    player = { x: W / 2, y: H / 2, vx: 0, vy: 0, dashT: 0, hurt: 0 };
+    moths = []; drops = []; parts = [];
+    elapsed = 0; score = 0; light = 100; dashCd = 0; spawnT = 2; shake = 0;
+    for (let i = 0; i < 3; i++) spawnDrop();
+  }
+
+  function start() {
+    reset();
+    state = 'play';
+    $('card').hidden = true;
+  }
+
+  function gameOver() {
+    state = 'over';
+    canStartAt = performance.now() + 900;
+    const isBest = score > best;
+    if (isBest) { best = score; try { localStorage.setItem('mothlight-best', best); } catch (e) {} }
+    $('best').textContent = best;
+    $('cardTitle').textContent = 'Snuffed out';
+    $('cardText').textContent = `You drank ${score} drop${score === 1 ? '' : 's'} of oil and stayed lit for ${fmt(elapsed)}.` + (isBest ? ' That is a new best.' : ` Your best is ${best}.`);
+    $('cardKeys').hidden = true;
+    $('cardGo').textContent = 'Press W, A, S or D to relight';
+    $('card').hidden = false;
+  }
+
+  // ---- input: W A S D only ----
+  const CODE = { KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd' };
+  function press(k) {
+    if (held[k]) return;
+    held[k] = 1;
+    const now = performance.now();
+    if (state === 'play') {
+      if (now - lastTap[k] < 260) tryDash(k);
+    } else if (now >= canStartAt) {
+      start();
+    }
+    lastTap[k] = now;
+  }
+  function release(k) { held[k] = 0; }
+
+  addEventListener('keydown', e => { const k = CODE[e.code]; if (!k) return; e.preventDefault(); if (!e.repeat) press(k); });
+  addEventListener('keyup', e => { const k = CODE[e.code]; if (k) release(k); });
+  addEventListener('blur', () => { for (const k in held) held[k] = 0; });
+
+  document.querySelectorAll('.pad button').forEach(b => {
+    const k = b.dataset.k;
+    const up = () => { release(k); b.classList.remove('on'); };
+    b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); press(k); b.classList.add('on'); });
+    b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
+  });
+
+  function inputDir() {
+    let x = held.d - held.a, y = held.s - held.w;
+    const m = Math.hypot(x, y);
+    return m ? [x / m, y / m] : [0, 0];
+  }
+
+  function tryDash(k) {
+    if (dashCd > 0) return;
+    let [dx, dy] = inputDir();
+    if (!dx && !dy) [dx, dy] = DIRS[k];
+    player.vx = dx * 900; player.vy = dy * 900;
+    player.dashT = 0.18;
+    dashCd = DASH_CD;
+    if (!reduceMotion) shake = 6;
+    for (const m of moths) {
+      const ddx = m.x - player.x, ddy = m.y - player.y, d = Math.hypot(ddx, ddy) || 1;
+      if (d < 170) { m.vx = ddx / d * 520; m.vy = ddy / d * 520; m.stun = 0.7; }
+    }
+    burst(player.x, player.y, 26, 255, 196, 107, 260);
+  }
+
+  // ---- spawning ----
+  function spawnDrop() {
+    let x, y, tries = 0;
+    do { x = 40 + Math.random() * (W - 80); y = 70 + Math.random() * (H - 110); tries++; }
+    while (player && Math.hypot(x - player.x, y - player.y) < 140 && tries < 30);
+    drops.push({ x, y, t: Math.random() * 6 });
+  }
+  function spawnMoth() {
+    const side = Math.floor(Math.random() * 4), pad = 20;
+    const x = side === 0 ? -pad : side === 1 ? W + pad : Math.random() * W;
+    const y = side === 2 ? -pad : side === 3 ? H + pad : Math.random() * H;
+    moths.push({ x, y, vx: 0, vy: 0, phase: Math.random() * 7, stun: 0, wob: 0.6 + Math.random() * 0.8 });
+  }
+  function burst(x, y, n, r, g, b, sp) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, s = sp * (0.3 + Math.random() * 0.7);
+      parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.5 + Math.random() * 0.4, max: 0.9, r, g, b });
+    }
+  }
+
+  // ---- update ----
+  function update(dt) {
+    elapsed += dt;
+    dashCd = Math.max(0, dashCd - dt);
+    shake = Math.max(0, shake - dt * 30);
+
+    // player
+    const [dx, dy] = inputDir();
+    if (player.dashT > 0) {
+      player.dashT -= dt;
+      player.vx *= Math.exp(-4 * dt); player.vy *= Math.exp(-4 * dt);
+      if (Math.random() < 0.8) parts.push({ x: player.x, y: player.y, vx: 0, vy: 0, life: 0.3, max: 0.3, r: 255, g: 196, b: 107 });
+    } else {
+      const sp = 250, k = Math.min(1, dt * 10);
+      player.vx += (dx * sp - player.vx) * k;
+      player.vy += (dy * sp - player.vy) * k;
+    }
+    player.x = Math.max(10, Math.min(W - 10, player.x + player.vx * dt));
+    player.y = Math.max(10, Math.min(H - 10, player.y + player.vy * dt));
+
+    // flame burns down
+    light -= (3 + Math.min(3, elapsed * 0.02)) * dt;
+
+    // drops
+    for (let i = drops.length - 1; i >= 0; i--) {
+      const d = drops[i]; d.t += dt;
+      if (Math.hypot(d.x - player.x, d.y - player.y) < 20) {
+        drops.splice(i, 1);
+        score++; light = Math.min(100, light + 20);
+        burst(d.x, d.y, 14, 255, 227, 154, 160);
+        spawnDrop();
+      }
+    }
+
+    // moths: faster over time, and drawn harder to a brighter flame
+    spawnT -= dt;
+    if (spawnT <= 0 && moths.length < 40) {
+      spawnMoth();
+      spawnT = Math.max(0.8, 3.6 - elapsed * 0.045);
+    }
+    const base = Math.min(175, 70 + elapsed * 1.1) * (0.75 + light / 300);
+    player.hurt = Math.max(0, player.hurt - dt);
+    for (const m of moths) {
+      m.phase += dt * 22;
+      if (m.stun > 0) {
+        m.stun -= dt;
+        m.vx *= Math.exp(-3 * dt); m.vy *= Math.exp(-3 * dt);
+      } else {
+        const ddx = player.x - m.x, ddy = player.y - m.y, d = Math.hypot(ddx, ddy) || 1;
+        const nx = ddx / d, ny = ddy / d;
+        const w = Math.sin(elapsed * 3 + m.phase * 0.05) * m.wob;
+        const tx = (nx - ny * w) * base, ty = (ny + nx * w) * base;
+        m.vx += (tx - m.vx) * Math.min(1, dt * 2.4);
+        m.vy += (ty - m.vy) * Math.min(1, dt * 2.4);
+      }
+      m.x += m.vx * dt; m.y += m.vy * dt;
+      if (player.dashT <= 0 && Math.hypot(m.x - player.x, m.y - player.y) < 16) {
+        light -= 26 * dt;
+        player.hurt = 0.15;
+      }
+    }
+
+    // particles
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i]; p.life -= dt;
+      if (p.life <= 0) { parts.splice(i, 1); continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.92; p.vy *= 0.92;
+    }
+
+    if (light <= 0) { light = 0; burst(player.x, player.y, 40, 140, 130, 170, 200); gameOver(); }
+  }
+
+  // ---- draw ----
+  function drawMoth(m, alpha) {
+    const flap = Math.abs(Math.sin(m.phase));
+    const ang = Math.atan2(m.vy, m.vx);
+    ctx.save();
+    ctx.translate(m.x, m.y); ctx.rotate(ang + Math.PI / 2);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#b9b0d6';
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.ellipse(s * (3 + flap * 4), 0, 2 + flap * 5, 6, s * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#6f6790';
+    ctx.beginPath(); ctx.ellipse(0, 1, 2, 6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function draw(now) {
+    const t = now / 1000;
+    ctx.save();
+    if (shake > 0) ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
+    ctx.fillStyle = '#14121f';
+    ctx.fillRect(-10, -10, W + 20, H + 20);
+
+    // garden floor
+    ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+    for (const g of ground) {
+      if (g.stone) { ctx.fillStyle = '#2a2638'; ctx.beginPath(); ctx.ellipse(g.x, g.y, g.h * 0.9, g.h * 0.55, 0, 0, Math.PI * 2); ctx.fill(); }
+      else { ctx.strokeStyle = '#2f4a3a'; ctx.beginPath(); ctx.moveTo(g.x, g.y); ctx.lineTo(g.x + g.lean + Math.sin(t * 1.3 + g.x) * 0.8, g.y - g.h); ctx.stroke(); }
+    }
+
+    const px = player ? player.x : W / 2, py = player ? player.y : H / 2;
+    const lit = state === 'title' ? 70 : light;
+    const flick = reduceMotion ? 0 : Math.sin(t * 17) * 3 + Math.sin(t * 7.3) * 4;
+    const R = 50 + lit * 2.4 + flick;
+
+    if (player) {
+      for (const p of parts) {
+        ctx.globalAlpha = Math.max(0, p.life / p.max);
+        ctx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
+        ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+      }
+      ctx.globalAlpha = 1;
+      for (const m of moths) drawMoth(m, 1);
+    }
+
+    // darkness: a radial falloff from the lantern
+    const dark = ctx.createRadialGradient(px, py, R * 0.15, px, py, R);
+    dark.addColorStop(0, 'rgba(8,7,14,0)');
+    dark.addColorStop(0.6, 'rgba(8,7,14,0.45)');
+    dark.addColorStop(1, 'rgba(8,7,14,0.96)');
+    ctx.fillStyle = dark;
+    ctx.fillRect(-10, -10, W + 20, H + 20);
+
+    // warm glow
+    ctx.globalCompositeOperation = 'lighter';
+    const glow = ctx.createRadialGradient(px, py, 0, px, py, R * 0.7);
+    glow.addColorStop(0, player && player.hurt > 0 ? 'rgba(255,107,94,0.28)' : 'rgba(255,196,107,0.22)');
+    glow.addColorStop(1, 'rgba(255,196,107,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(px, py, R * 0.7, 0, Math.PI * 2); ctx.fill();
+
+    if (player) {
+      // oil drops glint through the dark so you can find them
+      for (const d of drops) {
+        const pulse = 0.6 + Math.sin(d.t * 3) * 0.4;
+        const g = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, 16);
+        g.addColorStop(0, `rgba(255,227,154,${0.55 * pulse})`); g.addColorStop(1, 'rgba(255,227,154,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(d.x, d.y, 16, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffe39a';
+        ctx.beginPath(); ctx.moveTo(d.x, d.y - 6); ctx.quadraticCurveTo(d.x + 5, d.y + 1, d.x, d.y + 5); ctx.quadraticCurveTo(d.x - 5, d.y + 1, d.x, d.y - 6); ctx.fill();
+      }
+      // moth eyes catch the light even in the dark
+      ctx.fillStyle = 'rgba(255,107,94,0.75)';
+      for (const m of moths) {
+        const a = Math.atan2(m.vy, m.vx), ex = Math.cos(a) * 5, ey = Math.sin(a) * 5, sx = -Math.sin(a) * 1.8, sy = Math.cos(a) * 1.8;
+        ctx.fillRect(m.x + ex + sx - 1, m.y + ey + sy - 1, 2, 2);
+        ctx.fillRect(m.x + ex - sx - 1, m.y + ey - sy - 1, 2, 2);
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    // the lantern
+    if (state !== 'over') {
+      ctx.fillStyle = '#3a2f22';
+      ctx.fillRect(px - 6, py - 10, 12, 3);
+      ctx.fillStyle = player && player.hurt > 0 ? '#ff6b5e' : '#ffc46b';
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(px - 5, py - 7, 10, 14, 3) : ctx.rect(px - 5, py - 7, 10, 14); ctx.fill();
+      ctx.fillStyle = '#fff4d6';
+      ctx.beginPath(); ctx.ellipse(px, py + 1 + flick * 0.1, 2, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function fmt(s) { s = Math.floor(s); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+
+  function hud() {
+    if (!player) return;
+    $('barFill').style.width = light + '%';
+    $('bar').classList.toggle('low', light < 25);
+    $('oil').textContent = score;
+    $('time').textContent = fmt(elapsed);
+    const d = $('dash');
+    d.classList.toggle('ready', dashCd <= 0);
+    d.textContent = dashCd <= 0 ? 'Dash ready' : `Dash ${dashCd.toFixed(1)}s`;
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (state === 'play' && !document.hidden) update(dt);
+    draw(now); hud();
+    requestAnimationFrame(frame);
+  }
+
+  addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
