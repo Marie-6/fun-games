@@ -25,3 +25,10 @@ You are the last lantern in the garden. Drink oil to stay lit and keep away from
 Play: https://marie-6.github.io/fun-games/mothlight/
 
 Controls: W A S D only. Double-tap any of them to dash.
+
+## Pigeons in New York
+You are a city pigeon. Cross New York's streets without getting squashed by taxis, buses or people.
+
+Play: https://marie-6.github.io/fun-games/pigeons-in-new-york/
+
+Controls: one button. Press Space to stop or walk, hold Space to fly. On a phone, tap the screen.
