@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Look Busy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: the office floor plan is scaled to fit under a floating HUD; one card centers over it. Deliberately single-theme (fluorescent night shift). */
+:root {
+  --bg: #10131c;
+  --ink: #eef0f6;
+  --dim: #8b92a8;
+  --note: #ffd84a;
+  --danger: #ff5a4f;
+  --calm: #6fd3a0;
+  --panel: rgba(20, 24, 36, 0.86);
+  --display: "Archivo Black", "Arial Black", Impact, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font-family: var(--mono); overflow: hidden; user-select: none; -webkit-user-select: none; }
+.stage { position: relative; height: 100%; }
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.hud {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px;
+  padding-block: 12px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase;
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.stat { color: var(--dim); }
+.stat b { color: var(--ink); font-weight: 600; }
+.clock b { color: var(--note); }
+.meter { display: flex; align-items: center; gap: 8px; }
+.bar { width: clamp(80px, 18vw, 170px); height: 8px; border-radius: 4px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 100%; background: var(--calm); transition: background 0.2s; }
+.bar.low i { background: var(--danger); }
+.strikes { letter-spacing: 0.15em; }
+.strikes .x { color: var(--danger); }
+.status { margin-left: auto; color: var(--note); }
+
+.toast {
+  position: absolute; left: 50%; top: 56px; transform: translateX(-50%);
+  padding: 6px 12px; border-radius: 4px; background: var(--note); color: #1a1a1a;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.04em; white-space: nowrap;
+  pointer-events: none; transition: opacity 0.25s;
+}
+.toast.bad { background: var(--danger); color: #fff; }
+
+.card {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-1deg);
+  width: min(440px, calc(100% - 32px));
+  padding: 26px 24px; border-radius: 3px;
+  background: var(--note); color: #22201a;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column; gap: 12px; text-align: left;
+}
+.card h1 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(30px, 8vw, 44px); line-height: 1; text-wrap: balance; }
+.card p { margin: 0; font-size: 12.5px; line-height: 1.65; }
+.card .sub { opacity: 0.7; }
+.keys { display: grid; grid-template-columns: auto 1fr; gap: 7px 12px; align-items: center; font-size: 12px; }
+.keycap { display: inline-flex; gap: 4px; }
+.keycap kbd { font-family: var(--mono); font-weight: 600; min-width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 4px; border: 1px solid #22201a; border-bottom-width: 2px; font-size: 11px; }
+.go { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; animation: blink 1.4s ease-in-out infinite; }
+@keyframes blink { 50% { opacity: 0.35; } }
+
+.pad { position: absolute; bottom: max(18px, env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); display: none; grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(2, 58px); gap: 8px; }
+.pad button { font-family: var(--mono); font-weight: 600; font-size: 18px; color: var(--ink); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.18); border-radius: 10px; touch-action: none; }
+.pad button.on { background: rgba(255,216,74,0.25); border-color: var(--note); }
+.pad [data-k="w"] { grid-column: 2; grid-row: 1; }
+.pad [data-k="a"] { grid-column: 1; grid-row: 2; }
+.pad [data-k="s"] { grid-column: 2; grid-row: 2; }
+.pad [data-k="d"] { grid-column: 3; grid-row: 2; }
+@media (pointer: coarse) { .pad { display: grid; } }
+@media (prefers-reduced-motion: reduce) { .go { animation: none; } }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <canvas id="game"></canvas>
+  <div class="hud">
+    <span class="stat">Day <b id="day">1</b></span>
+    <span class="stat clock"><b id="clock">9:00 AM</b></span>
+    <div class="meter"><span class="stat">Sanity</span><div class="bar" id="bar"><i id="barFill"></i></div></div>
+    <span class="stat">Fun <b id="fun">0</b></span>
+    <span class="stat strikes" id="strikes">Strikes ○○○</span>
+    <span class="stat">Best <b id="best">0</b></span>
+    <span class="status" id="status"></span>
+  </div>
+  <div class="toast" id="toast" style="opacity:0"></div>
+
+  <div class="card" id="card">
+    <h1 id="cardTitle">Look Busy</h1>
+    <p id="cardText">It's 9:00 AM and your soul is already leaving your body. Sneak off to the coffee machine, the ping pong table and the nap couch to keep your sanity up. If the boss catches you away from your desk, that's a strike. Three strikes and you're fired. Make it to 5:00 PM.</p>
+    <div class="keys" id="cardKeys">
+      <span class="keycap"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>Walk. That's it. Stand on a fun spot to slack.</span>
+      <span>🪑</span><span>Your desk is safe. The boss can stare all day.</span>
+      <span>👀</span><span>Stay out of the yellow cone. Walls and cubicles hide you.</span>
+      <span>☕</span><span>Coffee makes you walk faster for a bit.</span>
+    </div>
+    <p class="sub" id="cardSub">From day 2, Gary from accounting wants to chat. From day 3, HR starts walking around too.</p>
+    <div class="go" id="cardGo">Press W, A, S or D to clock in</div>
+  </div>
+
+  <div class="pad" id="pad">
+    <button data-k="w" aria-label="W">W</button>
+    <button data-k="a" aria-label="A">A</button>
+    <button data-k="s" aria-label="S">S</button>
+    <button data-k="d" aria-label="D">D</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cvs = document.getElementById('game');
+  const ctx = cvs.getContext('2d');
+  const $ = id => document.getElementById(id);
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const coarse = matchMedia('(pointer: coarse)').matches;
+
+  // ---- the office ----
+  // # wall, d desk, B boss's conference table, Y your desk, letters below are fun spots
+  const MAP = [
+    '##########################',
+    '#c.......#........#....p.#',
+    '#........#.dd..dd.#......#',
+    '#..dd.dd.#.dd..dd.#..s...#',
+    '#..dd.dd.#........#......#',
+    '#........#.dd..dd.#...g..#',
+    '###..#####.dd..dd.###..###',
+    '#........................#',
+    '#..dd.dd..dd.dd..dd.dd...#',
+    '#..ddYdd..dd.dd..dd.dd..v#',
+    '#........................#',
+    '###..####..####..####..###',
+    '#........#........#......#',
+    '#.dd.dd..#..BBBB..#..b...#',
+    '#........#........#......#',
+    '##########################',
+  ];
+  const COLS = 26, ROWS = 16;
+  const SOLID = new Set(['#', 'd', 'B']);
+  const SPOT_INFO = {
+    c: { name: 'Coffee machine', emoji: '☕', fun: 8, calm: 20, coffee: true },
+    p: { name: 'Ping pong', emoji: '🏓', fun: 16, calm: 18 },
+    s: { name: 'Nap couch', emoji: '🛋️', fun: 10, calm: 32 },
+    g: { name: 'Arcade cabinet', emoji: '🕹️', fun: 18, calm: 16 },
+    v: { name: 'Vending machine', emoji: '🥤', fun: 9, calm: 22 },
+    b: { name: 'Free donuts', emoji: '🍩', fun: 12, calm: 24 },
+  };
+  const spots = [], floors = [];
+  let desk = null;
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const ch = MAP[y][x];
+    if (SOLID.has(ch)) continue;
+    floors.push([x, y]);
+    if (ch === 'Y') desk = { x, y };
+    if (SPOT_INFO[ch]) spots.push({ x, y, ...SPOT_INFO[ch], charge: 1, cool: 0 });
+  }
+  const solidAt = (tx, ty) => tx < 0 || ty < 0 || tx >= COLS || ty >= ROWS || SOLID.has(MAP[ty][tx]);
+  const tileOf = e => [Math.floor(e.x), Math.floor(e.y)];
+
+  function bfs(from, to) {
+    const key = (x, y) => y * COLS + x;
+    const prev = new Map([[key(...from), null]]);
+    const q = [from];
+    while (q.length) {
+      const [x, y] = q.shift();
+      if (x === to[0] && y === to[1]) break;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx, ny = y + dy, k = key(nx, ny);
+        if (solidAt(nx, ny) || prev.has(k)) continue;
+        prev.set(k, [x, y]); q.push([nx, ny]);
+      }
+    }
+    const path = [];
+    let cur = prev.has(key(...to)) ? to : null;
+    while (cur && !(cur[0] === from[0] && cur[1] === from[1])) { path.unshift(cur); cur = prev.get(key(...cur)); }
+    return path;
+  }
+
+  // ---- layout ----
+  let W = 0, H = 0, DPR = 1, T = 20, ox = 0, oy = 0;
+  function resize() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    W = cvs.clientWidth; H = cvs.clientHeight;
+    cvs.width = Math.round(W * DPR); cvs.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const top = 64, bottom = coarse ? 150 : 16;
+    T = Math.max(8, Math.floor(Math.min((W - 24) / COLS, (H - top - bottom) / ROWS)));
+    ox = Math.round((W - T * COLS) / 2);
+    oy = Math.round(top + (H - top - bottom - T * ROWS) / 2);
+  }
+
+  // ---- state ----
+  let state = 'title';        // title | play | break | over
+  let canStartAt = 0;
+  let player, npcs, floats, day, dayT, sanity, fun, strikes, susp, toastT, tick;
+  let best = 0;
+  try { best = +localStorage.getItem('look-busy-best') || 0; } catch (e) {}
+  $('best').textContent = best;
+
+  const DAY_LEN = 90;         // seconds from 9 to 5
+  const RANGE = 5.5, HALF = 0.62;
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const GARY = ['Got a sec?', 'Did you see the game?', 'So about my fantasy league...', 'Quick question!', 'Is it Friday yet?'];
+
+  function makeNPC(kind, x, y, speed) {
+    return { kind, x: x + 0.5, y: y + 0.5, ang: Math.PI / 2, speed, path: [], mode: 'patrol', wait: 1, waitMax: 1, lookBase: Math.PI / 2, say: '', sayT: 0, lost: 0, repath: 0, lx: 0, ly: 0, grace: 2, cd: 4 };
+  }
+
+  function newGame() { day = 1; strikes = 0; fun = 0; startDay(); }
+  function startDay() {
+    player = { x: desk.x + 0.5, y: desk.y + 0.5, vx: 0, vy: 0, ang: -Math.PI / 2, stuck: 0, coffee: 0 };
+    const sp = 1.6 + (day - 1) * 0.22;
+    npcs = [makeNPC('boss', 13, 12, sp)];
+    if (day >= 2) npcs.push(makeNPC('gary', 12, 7, 1.4));
+    if (day >= 3) npcs.push(makeNPC('hr', 21, 7, sp * 0.9));
+    for (const s of spots) { s.charge = 1; s.cool = 0; }
+    floats = []; dayT = 0; sanity = 100; susp = 0; toastT = 0; tick = 0;
+    state = 'play';
+    $('card').hidden = true;
+    toast(day === 1 ? 'Morning! Your desk is the glowing chair.' : day === 2 ? 'Gary from accounting is in today.' : day === 3 ? 'HR is doing walkarounds now.' : `Day ${day}. The boss is getting faster.`);
+  }
+
+  function showCard(title, text, go) {
+    canStartAt = performance.now() + 900;
+    $('cardTitle').textContent = title;
+    $('cardText').textContent = text;
+    $('cardKeys').hidden = true; $('cardSub').hidden = true;
+    $('cardGo').textContent = go;
+    $('card').hidden = false;
+  }
+
+  function endDay() {
+    state = 'break';
+    showCard('5:00 PM. Clocked out.', `You survived day ${day} with ${Math.floor(fun)} fun points and ${strikes} strike${strikes === 1 ? '' : 's'} on your record. Tomorrow will be worse.`, 'Press W, A, S or D to clock in tomorrow');
+  }
+
+  function gameOver(reason) {
+    state = 'over';
+    const score = Math.floor(fun), isBest = score > best;
+    if (isBest) { best = score; try { localStorage.setItem('look-busy-best', best); } catch (e) {} }
+    $('best').textContent = best;
+    const tail = isBest ? ' That is a new best.' : ` Your best is ${best}.`;
+    if (reason === 'fired') showCard("You're fired.", `Three strikes on day ${day}. Security walks you out holding a box with your stapler in it. You had ${score} fun points.` + tail, 'Press W, A, S or D to find a new job');
+    else showCard('You quit.', `Your sanity hit zero at ${clockText()} on day ${day}. You walk out and never come back. You had ${score} fun points.` + tail, 'Press W, A, S or D to find a new job');
+  }
+
+  function toast(text, bad) {
+    const t = $('toast');
+    t.textContent = text; t.classList.toggle('bad', !!bad); t.style.opacity = 1;
+    toastT = 2.6;
+  }
+  function say(n, text) { n.say = text; n.sayT = 2; }
+
+  // ---- input: W A S D only ----
+  const held = { w: 0, a: 0, s: 0, d: 0 };
+  const CODE = { KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd' };
+  function press(k) {
+    if (held[k]) return;
+    held[k] = 1;
+    if (state !== 'play' && performance.now() >= canStartAt) {
+      if (state === 'break') { day++; startDay(); } else newGame();
+    }
+  }
+  function release(k) { held[k] = 0; }
+
+  addEventListener('keydown', e => { const k = CODE[e.code]; if (!k) return; e.preventDefault(); if (!e.repeat) press(k); });
+  addEventListener('keyup', e => { const k = CODE[e.code]; if (k) release(k); });
+  addEventListener('blur', () => { for (const k in held) held[k] = 0; });
+
+  document.querySelectorAll('.pad button').forEach(b => {
+    const k = b.dataset.k;
+    const up = () => { release(k); b.classList.remove('on'); };
+    b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture(e.pointerId); press(k); b.classList.add('on'); });
+    b.addEventListener('pointerup', up); b.addEventListener('pointercancel', up); b.addEventListener('lostpointercapture', up);
+  });
+
+  function inputDir() {
+    const x = held.d - held.a, y = held.s - held.w, m = Math.hypot(x, y);
+    return m ? [x / m, y / m] : [0, 0];
+  }
+
+  // ---- helpers ----
+  function angDiff(a, b) { let d = a - b; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; }
+  function turnTo(n, a, k) { n.ang += angDiff(a, n.ang) * Math.min(1, k); n.ang = angDiff(n.ang, 0); }
+  const onDesk = () => Math.floor(player.x) === desk.x && Math.floor(player.y) === desk.y;
+  const spotUnder = () => spots.find(s => s.x === Math.floor(player.x) && s.y === Math.floor(player.y));
+
+  function clear(x0, y0, x1, y1) {
+    const d = Math.hypot(x1 - x0, y1 - y0), n = Math.ceil(d / 0.12);
+    for (let i = 1; i < n; i++) {
+      const t = i / n;
+      if (solidAt(Math.floor(x0 + (x1 - x0) * t), Math.floor(y0 + (y1 - y0) * t))) return false;
+    }
+    return true;
+  }
+  function canSee(n) {
+    if (n.grace > 0) return false;
+    const dx = player.x - n.x, dy = player.y - n.y, d = Math.hypot(dx, dy);
+    if (d < 0.8) return true;                       // bumped right into them
+    if (d > RANGE || Math.abs(angDiff(Math.atan2(dy, dx), n.ang)) > HALF) return false;
+    return clear(n.x, n.y, player.x, player.y);
+  }
+  function castDist(x, y, a) {
+    const cx = Math.cos(a), cy = Math.sin(a);
+    for (let r = 0.1; r < RANGE; r += 0.1) if (solidAt(Math.floor(x + cx * r), Math.floor(y + cy * r))) return r;
+    return RANGE;
+  }
+  function randomTarget(forBoss) {
+    // bosses love checking the break areas
+    if (forBoss && Math.random() < 0.45) { const s = pick(spots); return [s.x, s.y]; }
+    return pick(floors);
+  }
+
+  function walk(n, speed, dt) {
+    if (!n.path.length) return false;
+    const [tx, ty] = n.path[0], cx = tx + 0.5, cy = ty + 0.5;
+    const dx = cx - n.x, dy = cy - n.y, d = Math.hypot(dx, dy), step = speed * dt;
+    if (d <= step) { n.x = cx; n.y = cy; n.path.shift(); }
+    else { n.x += dx / d * step; n.y += dy / d * step; }
+    if (d > 0.01) turnTo(n, Math.atan2(dy, dx), dt * 9);
+    return true;
+  }
+  function patrol(n, dt, speed, forBoss) {
+    if (n.wait > 0) {
+      n.wait -= dt;
+      if (forBoss) n.ang = n.lookBase + Math.sin((n.waitMax - n.wait) * 2.4) * 1.1;
+      if (n.wait <= 0) n.path = bfs(tileOf(n), randomTarget(forBoss));
+    } else if (!walk(n, speed, dt)) {
+      n.wait = n.waitMax = 0.8 + Math.random() * 1.6;
+      n.lookBase = n.ang;
+    }
+  }
+
+  // ---- update ----
+  function update(dt) {
+    dayT += dt; tick += dt;
+    if (toastT > 0 && (toastT -= dt) <= 0) $('toast').style.opacity = 0;
+
+    // player
+    let [dx, dy] = inputDir();
+    if (player.stuck > 0) { player.stuck -= dt; dx = dy = 0; }
+    player.coffee = Math.max(0, player.coffee - dt);
+    const sp = 3.3 * (player.coffee > 0 ? 1.45 : 1), k = Math.min(1, dt * 14);
+    player.vx += (dx * sp - player.vx) * k;
+    player.vy += (dy * sp - player.vy) * k;
+    const R = 0.28;
+    const hit = (x, y) => solidAt(Math.floor(x - R), Math.floor(y - R)) || solidAt(Math.floor(x + R), Math.floor(y - R)) || solidAt(Math.floor(x - R), Math.floor(y + R)) || solidAt(Math.floor(x + R), Math.floor(y + R));
+    const nx = player.x + player.vx * dt; if (!hit(nx, player.y)) player.x = nx; else player.vx = 0;
+    const ny = player.y + player.vy * dt; if (!hit(player.x, ny)) player.y = ny; else player.vy = 0;
+    if (dx || dy) player.ang = Math.atan2(dy, dx);
+
+    // slacking
+    for (const s of spots) if (s.cool > 0 && (s.cool -= dt) <= 0) s.charge = 1;
+    const spot = spotUnder();
+    const slacking = spot && spot.charge > 0;
+    if (slacking) {
+      spot.charge -= 0.2 * dt;
+      fun += spot.fun * dt;
+      sanity = Math.min(100, sanity + spot.calm * dt);
+      if (spot.coffee) player.coffee = 6;
+      if (tick > 0.45) { tick = 0; floats.push({ x: player.x, y: player.y - 0.5, t: 1, text: '+' + Math.round(spot.fun * 0.45) }); }
+      if (spot.charge <= 0) { spot.charge = 0; spot.cool = 14; toast(`${spot.name} is empty. Back in a bit.`); }
+    } else {
+      sanity -= (2 + day * 0.5) * dt;
+    }
+
+    // people
+    let seen = false;
+    for (const n of npcs) {
+      n.sayT = Math.max(0, n.sayT - dt);
+      n.grace = Math.max(0, n.grace - dt);
+      if (n.kind === 'gary') {
+        n.cd = Math.max(0, n.cd - dt);
+        patrol(n, dt, n.speed, false);
+        if (n.cd <= 0 && player.stuck <= 0 && !onDesk() && Math.hypot(n.x - player.x, n.y - player.y) < 0.7) {
+          player.stuck = 1.8; n.cd = 10; say(n, pick(GARY));
+          toast('Gary has trapped you in small talk.');
+        }
+        continue;
+      }
+      const sees = canSee(n), atDesk = onDesk();
+      const d = Math.hypot(player.x - n.x, player.y - n.y);
+      if (sees && !atDesk) {
+        seen = true; n.lost = 0; n.lx = Math.floor(player.x); n.ly = Math.floor(player.y);
+        if (n.mode !== 'chase') { n.mode = 'chase'; n.repath = 0; say(n, n.kind === 'hr' ? pick(['A word?', 'Excuse me!']) : pick(['Hey!', 'Is that you?', 'Hmm?'])); }
+        susp += dt * (1.25 - 0.6 * d / RANGE) * (n.kind === 'hr' ? 1.2 : 1);
+      }
+      if (n.mode === 'chase') {
+        if (atDesk) {
+          n.mode = 'patrol'; n.path = []; n.wait = n.waitMax = 1.2; n.lookBase = n.ang;
+          say(n, pick(['Huh. Working hard.', 'Carry on.', 'Good, good.']));
+        } else {
+          if (!sees) n.lost += dt;
+          if (n.lost > 2.4) {
+            n.mode = 'patrol'; n.path = []; n.wait = n.waitMax = 1.4; n.lookBase = n.ang;
+            say(n, '...must be nothing.');
+          } else {
+            if ((n.repath -= dt) <= 0) { n.repath = 0.35; n.path = bfs(tileOf(n), [n.lx, n.ly]); }
+            walk(n, n.speed * 1.25, dt);
+            if (sees) turnTo(n, Math.atan2(player.y - n.y, player.x - n.x), dt * 10);
+          }
+        }
+      } else patrol(n, dt, n.speed, true);
+    }
+    if (!seen) susp = Math.max(0, susp - dt * 0.35);
+    if (susp >= 1) strike();
+
+    for (let i = floats.length - 1; i >= 0; i--) { const f = floats[i]; f.t -= dt; f.y -= dt * 0.8; if (f.t <= 0) floats.splice(i, 1); }
+
+    if (state !== 'play') return;
+    if (sanity <= 0) { sanity = 0; gameOver('quit'); }
+    else if (dayT >= DAY_LEN) endDay();
+  }
+
+  function strike() {
+    strikes++; susp = 0;
+    player.x = desk.x + 0.5; player.y = desk.y + 0.5; player.vx = player.vy = 0; player.stuck = 0;
+    for (const n of npcs) {
+      if (n.kind === 'gary') continue;
+      if (n.mode === 'chase') say(n, pick(['My office. Now.', 'This is going in your file.', 'We need to talk.']));
+      n.mode = 'patrol'; n.path = []; n.wait = n.waitMax = 1.5; n.grace = 3;
+    }
+    if (strikes >= 3) gameOver('fired');
+    else toast(`Strike ${strikes}! Marched back to your desk.`, true);
+  }
+
+  // ---- draw ----
+  const px = x => ox + x * T, py = y => oy + y * T;
+  const isDesk = (x, y) => !solidAt(x, y) ? false : MAP[y][x] === 'd';
+
+  function drawMap(t) {
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      const ch = MAP[y][x], X = px(x), Y = py(y);
+      if (ch === '#') {
+        ctx.fillStyle = '#151924'; ctx.fillRect(X, Y, T, T);
+        if (y + 1 < ROWS && MAP[y + 1][x] !== '#') { ctx.fillStyle = '#3a4360'; ctx.fillRect(X, Y + T - 3, T, 3); }
+        continue;
+      }
+      ctx.fillStyle = (x + y) % 2 ? '#323a50' : '#363e55';
+      ctx.fillRect(X, Y, T, T);
+      if (ch === 'd') {
+        ctx.fillStyle = '#cdb98f'; ctx.fillRect(X + 1, Y + 1, T - 2, T - 2);
+        ctx.fillStyle = '#20263a'; ctx.fillRect(X + T * 0.25, Y + T * 0.18, T * 0.5, T * 0.32);
+        ctx.fillStyle = '#7fd3ff'; ctx.fillRect(X + T * 0.29, Y + T * 0.22, T * 0.42, T * 0.24);
+        ctx.fillStyle = '#e9e1cf'; ctx.fillRect(X + T * 0.28, Y + T * 0.62, T * 0.44, T * 0.12);
+        ctx.fillStyle = '#7b7f94';
+        if (!isDesk(x, y - 1)) ctx.fillRect(X, Y, T, 3);
+        if (!isDesk(x, y + 1)) ctx.fillRect(X, Y + T - 3, T, 3);
+        if (!isDesk(x - 1, y)) ctx.fillRect(X, Y, 3, T);
+        if (!isDesk(x + 1, y)) ctx.fillRect(X + T - 3, Y, 3, T);
+      } else if (ch === 'B') {
+        ctx.fillStyle = '#7a5a3a'; ctx.fillRect(X, Y + T * 0.15, T, T * 0.7);
+        ctx.fillStyle = '#8d6a46'; ctx.fillRect(X, Y + T * 0.15, T, 3);
+      } else if (ch === 'Y') {
+        const pulse = reduceMotion ? 0.5 : 0.5 + Math.sin(t * 3) * 0.3;
+        ctx.fillStyle = `rgba(255,216,74,${0.12 + pulse * 0.15})`; ctx.fillRect(X, Y, T, T);
+        ctx.strokeStyle = `rgba(255,216,74,${0.4 + pulse * 0.4})`; ctx.lineWidth = 2;
+        ctx.strokeRect(X + 2, Y + 2, T - 4, T - 4);
+      }
+    }
+    // the boss's office sign
+    ctx.fillStyle = '#ff5a4f'; ctx.font = `600 ${Math.max(8, T * 0.38)}px "IBM Plex Mono", monospace`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('BOSS', px(14), py(14.5));
+  }
+
+  function drawSpots(t) {
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const s of spots) {
+      const X = px(s.x + 0.5), Y = py(s.y + 0.5);
+      if (s.charge > 0) {
+        const r = T * (0.55 + (reduceMotion ? 0 : Math.sin(t * 2.5 + s.x) * 0.06));
+        const g = ctx.createRadialGradient(X, Y, 0, X, Y, r);
+        g.addColorStop(0, 'rgba(111,211,160,0.35)'); g.addColorStop(1, 'rgba(111,211,160,0)');
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(X, Y, r, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = s.charge > 0 ? 1 : 0.3;
+      ctx.font = `${T * 0.68}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+      ctx.fillText(s.emoji, X, Y + 1);
+      ctx.globalAlpha = 1;
+      // how much is left
+      ctx.strokeStyle = s.charge > 0 ? '#6fd3a0' : '#8b92a8'; ctx.lineWidth = 2;
+      const f = s.charge > 0 ? s.charge : 1 - s.cool / 14;
+      ctx.beginPath(); ctx.arc(X, Y, T * 0.46, -Math.PI / 2, -Math.PI / 2 + f * Math.PI * 2); ctx.stroke();
+    }
+  }
+
+  function drawCone(n) {
+    const chase = n.mode === 'chase';
+    ctx.fillStyle = chase ? 'rgba(255,90,79,0.3)' : n.kind === 'hr' ? 'rgba(196,140,255,0.26)' : 'rgba(255,216,74,0.26)';
+    ctx.beginPath(); ctx.moveTo(px(n.x), py(n.y));
+    const N = 28;
+    for (let i = 0; i <= N; i++) {
+      const a = n.ang - HALF + (i / N) * HALF * 2, r = castDist(n.x, n.y, a);
+      ctx.lineTo(px(n.x + Math.cos(a) * r), py(n.y + Math.sin(a) * r));
+    }
+    ctx.closePath(); ctx.fill();
+  }
+
+  function drawPerson(x, y, ang, body, head, extra) {
+    const X = px(x), Y = py(y), r = T * 0.34;
+    ctx.save(); ctx.translate(X, Y); ctx.rotate(ang);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(2, 3, r * 1.05, r * 1.05, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = body; ctx.beginPath(); ctx.ellipse(0, 0, r * 0.75, r * 1.1, 0, 0, Math.PI * 2); ctx.fill();
+    if (extra) extra(r);
+    ctx.fillStyle = head; ctx.beginPath(); ctx.arc(r * 0.12, 0, r * 0.55, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  const tie = color => r => { ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(r * 0.55, 0); ctx.lineTo(r * 0.95, -r * 0.14); ctx.lineTo(r * 0.95, r * 0.14); ctx.fill(); };
+
+  function bubble(x, y, text, bad) {
+    ctx.font = `600 ${Math.max(10, T * 0.45)}px "IBM Plex Mono", ui-monospace, monospace`;
+    const w = ctx.measureText(text).width + 12, h = Math.max(16, T * 0.75);
+    let X = Math.max(4, Math.min(W - w - 4, px(x) - w / 2)), Y = py(y) - T * 0.7 - h;
+    ctx.fillStyle = bad ? '#ff5a4f' : '#eef0f6';
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(X, Y, w, h, 5) : ctx.rect(X, Y, w, h); ctx.fill();
+    ctx.fillStyle = bad ? '#fff' : '#1a1a1a'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, X + 6, Y + h / 2 + 1);
+  }
+
+  function draw(now) {
+    const t = now / 1000;
+    ctx.fillStyle = '#10131c'; ctx.fillRect(0, 0, W, H);
+    drawMap(t);
+    drawSpots(t);
+    if (!player) return;
+
+    for (const n of npcs) if (n.kind !== 'gary' && n.grace <= 0) drawCone(n);
+
+    for (const n of npcs) {
+      if (n.kind === 'boss') drawPerson(n.x, n.y, n.ang, '#3a3d48', '#e6b98f', tie('#ff5a4f'));
+      else if (n.kind === 'hr') drawPerson(n.x, n.y, n.ang, '#8a5fd1', '#c99372', r => { ctx.fillStyle = '#f5f0ff'; ctx.fillRect(r * 0.2, -r * 0.5, r * 0.5, r * 0.3); });
+      else drawPerson(n.x, n.y, n.ang, '#3f9e6e', '#f1c6a0');
+    }
+
+    const bob = player.stuck > 0 || reduceMotion ? 0 : Math.hypot(player.vx, player.vy) > 0.3 ? Math.sin(t * 16) * 0.04 : 0;
+    drawPerson(player.x, player.y + bob, player.ang, player.coffee > 0 ? '#ffb347' : '#5fb8ff', '#f4cfa8', r => { ctx.fillStyle = '#ffd84a'; ctx.fillRect(-r * 0.2, -r * 0.08, r * 0.6, r * 0.16); });
+
+    // suspicion ring over your head
+    if (susp > 0.01) {
+      const X = px(player.x), Y = py(player.y) - T * 0.85;
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.beginPath(); ctx.arc(X, Y, T * 0.3, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#ff5a4f';
+      ctx.beginPath(); ctx.arc(X, Y, T * 0.3, -Math.PI / 2, -Math.PI / 2 + Math.min(1, susp) * Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#ff5a4f'; ctx.font = `600 ${T * 0.4}px "IBM Plex Mono", monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(susp > 0.6 ? '!' : '?', X, Y + 1);
+    }
+    if (player.stuck > 0) bubble(player.x, player.y, '...uh huh', false);
+
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `600 ${Math.max(10, T * 0.5)}px "IBM Plex Mono", monospace`;
+    for (const f of floats) { ctx.globalAlpha = Math.max(0, f.t); ctx.fillStyle = '#6fd3a0'; ctx.fillText(f.text, px(f.x), py(f.y)); }
+    ctx.globalAlpha = 1;
+
+    for (const n of npcs) if (n.sayT > 0) bubble(n.x, n.y, n.say, n.kind !== 'gary' && n.mode === 'chase');
+  }
+
+  function clockText() {
+    const mins = Math.floor(9 * 60 + Math.min(1, (dayT || 0) / DAY_LEN) * 8 * 60);
+    const h = Math.floor(mins / 60), m = Math.floor(mins % 60 / 5) * 5;
+    return `${(h - 1) % 12 + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+  }
+
+  function hud() {
+    if (!player) return;
+    $('day').textContent = day;
+    $('clock').textContent = clockText();
+    $('barFill').style.width = sanity + '%';
+    $('bar').classList.toggle('low', sanity < 25);
+    $('fun').textContent = Math.floor(fun);
+    $('strikes').innerHTML = 'Strikes ' + [0, 1, 2].map(i => i < strikes ? '<span class="x">✕</span>' : '○').join('');
+    let st = '';
+    if (state === 'play') {
+      const s = spotUnder();
+      st = onDesk() ? 'At your desk. Safe.' : player.stuck > 0 ? 'Stuck talking to Gary' : s ? (s.charge > 0 ? `Slacking: ${s.name}` : `${s.name} is empty`) : player.coffee > 0 ? 'Caffeinated' : 'Out of your seat';
+    }
+    $('status').textContent = st;
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (state === 'play' && !document.hidden) update(dt);
+    draw(now); hud();
+    requestAnimationFrame(frame);
+  }
+
+  addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

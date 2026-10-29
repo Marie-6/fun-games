@@ -32,3 +32,10 @@ You are a city pigeon. Cross New York's streets without getting squashed by taxi
 Play: https://marie-6.github.io/fun-games/pigeons-in-new-york/
 
 Controls: one button. Press Space to stop or walk, hold Space to fly. On a phone, tap the screen.
+
+## Look Busy
+You are an office worker. Sneak off to slack while the boss isn't looking. Three strikes and you're fired.
+
+Play: https://marie-6.github.io/fun-games/look-busy/
+
+Controls: W A S D only.
