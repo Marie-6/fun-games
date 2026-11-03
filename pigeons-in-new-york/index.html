@@ -36,11 +36,6 @@ canvas{display:block;width:100%;height:100%}
 .lives{display:flex;gap:3px;margin-top:3px}
 .lives svg{width:15px;height:22px;transition:opacity .3s}
 .lives svg.lost{opacity:.18}
-.lives svg.fresh{animation:featherfall .7s ease-in both}
-@keyframes featherfall{0%{opacity:1;transform:none}100%{opacity:.18;transform:translateY(10px) rotate(50deg)}}
-.chip.hit{animation:chiphit .6s ease-out}
-@keyframes chiphit{0%,100%{transform:none}15%{transform:translateX(-5px)}30%{transform:translateX(5px)}45%{transform:translateX(-3px)}60%{transform:translateX(2px)}}
-.chip.hurt .label{color:#ff6b57}
 .small{font-family:var(--display);font-size:16px;color:var(--paper);line-height:1.1;font-variant-numeric:tabular-nums}
 #mute{pointer-events:auto;font:700 11px var(--body);letter-spacing:.1em;text-transform:uppercase;background:var(--ink-soft);color:var(--paper);border:2px solid var(--steel);border-radius:6px;padding:8px 9px;cursor:pointer}
 #mute:focus-visible{outline:3px solid var(--cab);outline-offset:2px}
@@ -76,7 +71,7 @@ canvas{display:block;width:100%;height:100%}
 .mode:focus-visible,.link:focus-visible{outline:3px solid var(--cab);outline-offset:2px}
 .link{pointer-events:auto;align-self:center;background:none;border:2px solid var(--steel);color:var(--paper);font:700 12px var(--body);letter-spacing:.1em;text-transform:uppercase;border-radius:6px;padding:8px 14px;cursor:pointer}
 @keyframes pulse{50%{transform:scale(1.03)}}
-@media (prefers-reduced-motion:reduce){.go{animation:none}#banner{transition:none}.chip.hit,.lives svg.fresh{animation:none}}
+@media (prefers-reduced-motion:reduce){.go{animation:none}#banner{transition:none}}
 </style>
 </head>
 <body>
@@ -87,7 +82,7 @@ canvas{display:block;width:100%;height:100%}
   <div class="hud">
     <div class="right">
       <div class="chip"><span class="label" id="lvLabel">Streets</span><span class="big" id="score">0</span></div>
-      <div class="chip" id="livesChip"><span class="label" id="livesLabel">Lives</span><span class="lives" id="lives"></span></div>
+      <div class="chip"><span class="label">Lives</span><span class="lives" id="lives"></span></div>
     </div>
     <div class="right">
       <div class="chip"><span class="label">Wings</span><div class="wings" id="wings"><i id="wingbar"></i></div>
@@ -482,7 +477,7 @@ function resetWorld() {
   Object.assign(P, {
     x: 0, alt: 0, mode: 'stop', phase: 0, stopT: 1e9, stamina: 100,
     hx: 0, hy: 0, hr: 0, tx: 0, ty: 0, tr: 0, lookT: 0, peckT: 0, flapT: 0,
-    deadT: 0, cause: '', squash: false, cooT: rand(2, 4), bubbleT: 0, flinchT: 0, invT: 0, dizzyT: 0, hitT: 0, shakeT: 0, flashT: 0,
+    deadT: 0, cause: '', squash: false, cooT: rand(2, 4), bubbleT: 0, flinchT: 0, invT: 0, dizzyT: 0,
   });
   camX = P.x - VW * 0.28;
   genUntil(camX + VW + 400);
@@ -508,7 +503,7 @@ function release() {
   if (!held) return;
   held = false;
   if (ignoreHold) { ignoreHold = false; return; }
-  if (state !== 'play' || P.mode === 'hit') return;
+  if (state !== 'play') return;
   // A tap toggles stop/walk; releasing a hold always walks on.
   const wasHold = now() - pressAt >= 0.17;
   if (P.mode === 'fly' || (wasHold && P.mode === 'stop') || (!wasHold && wasStopped)) P.mode = 'walk';
@@ -570,13 +565,9 @@ function die(by) {
   if (score > best) { best = score; try { localStorage.setItem('pigeons-ny-best-' + levelKey, String(best)); } catch (e) {} }
 }
 
-const HIT_TIME = 0.55;
 function hurt(by) {
   lives--;
-  // A short knocked-over moment, then the usual 2 s of blinking and dizziness.
-  P.mode = 'hit'; P.hitT = HIT_TIME; P.invT = 2 + HIT_TIME; P.dizzyT = 1.6 + HIT_TIME;
-  P.shakeT = 0.35; P.flashT = 0.45;
-  const chip = $('livesChip'); chip.classList.remove('hit'); void chip.offsetWidth; chip.classList.add('hit');
+  P.mode = 'walk'; P.invT = 2; P.dizzyT = 1.6;
   tone(520, 180, 0.18, 'square', 0.07); sfx.coo();
   for (let i = 0; i < 6; i++) {
     parts.push({ kind: 'feather', x: P.x, y: ROW - 14 - P.alt, vx: rand(-60, 60), vy: rand(-110, -30), r: rand(0, TAU), vr: rand(-6, 6), life: rand(1, 1.6), c: pick(['#a3abb4', '#858e98', '#d7dbe0']) });
@@ -608,13 +599,10 @@ function updateHud() {
   if (shownLives !== lives) {
     shownLives = lives;
     let h = '';
-    for (let i = 0; i < 3; i++) h += `<svg viewBox="0 0 16 24" class="${i < lives ? '' : i === lives && P.invT > 0 ? 'lost fresh' : 'lost'}" aria-hidden="true">${FEATHER}</svg>`;
+    for (let i = 0; i < 3; i++) h += `<svg viewBox="0 0 16 24" class="${i < lives ? '' : 'lost'}" aria-hidden="true">${FEATHER}</svg>`;
     $('lives').innerHTML = h;
     $('lives').setAttribute('aria-label', lives + ' lives');
   }
-  const status = P.mode === 'hit' ? 'Hit! −1' : P.invT > 0 ? 'Dizzy…' : 'Lives';
-  if ($('livesLabel').textContent !== status) $('livesLabel').textContent = status;
-  $('livesChip').classList.toggle('hurt', P.invT > 0 && P.mode !== 'dead');
   $('score').textContent = score;
   $('crusts').textContent = crustCount + ' / ' + nextLifeAt;
   $('wingbar').style.transform = `scaleX(${clamp(P.stamina / 100, 0, 1)})`;
@@ -641,7 +629,7 @@ function updatePigeon(dt) {
   const t = now();
   if (P.mode === 'dead') { P.deadT += dt; P.alt = Math.max(0, P.alt - dt * 120); return; }
 
-  if (state === 'play' && held && !ignoreHold && P.mode !== 'fly' && P.mode !== 'hit' && t - pressAt > 0.17 && P.stamina > 4) {
+  if (state === 'play' && held && !ignoreHold && P.mode !== 'fly' && t - pressAt > 0.17 && P.stamina > 4) {
     P.mode = 'fly'; P.flapT = 0; sfx.flap();
   }
 
@@ -662,10 +650,6 @@ function updatePigeon(dt) {
     }
     const k = Math.min(1, dt * 28);
     P.hx += (P.tx - P.hx) * k; P.hy += (P.ty - P.hy) * k; P.hr += (P.tr - P.hr) * k;
-  } else if (P.mode === 'hit') {
-    P.hitT -= dt;
-    P.hx += (-3 - P.hx) * Math.min(1, dt * 20); P.hy += (2 - P.hy) * Math.min(1, dt * 20); P.hr = 0;
-    if (P.hitT <= 0) { P.hitT = 0; P.mode = 'walk'; }
   } else if (P.mode === 'fly') {
     P.x += FLY * dt;
     P.flapT += dt;
@@ -680,10 +664,6 @@ function updatePigeon(dt) {
   const target = P.mode === 'fly' ? 44 : 0;
   P.alt += (target - P.alt) * Math.min(1, dt * (P.mode === 'fly' ? 9 : 7));
   if (P.alt < 0.3) P.alt = 0;
-  // knocked into a little hop while tumbling
-  if (P.mode === 'hit') P.alt = Math.max(P.alt, Math.sin((1 - P.hitT / HIT_TIME) * Math.PI) * 16);
-  if (P.shakeT > 0) P.shakeT -= dt;
-  if (P.flashT > 0) P.flashT -= dt;
   if (P.peckT > 0) { P.peckT -= dt; P.hy += Math.sin((1 - P.peckT / 0.25) * Math.PI) * 10; P.hx += 3; }
   if (P.flinchT > 0) P.flinchT -= dt;
   if (P.invT > 0) P.invT -= dt;
@@ -1175,23 +1155,9 @@ function drawPigeon(gx, gy) {
   ctx.fillStyle = `rgba(0,0,0,${clamp(0.3 - a * 0.004, 0.08, 0.3)})`;
   ell(gx - 2, gy + 1, 16 - a * 0.1, 4.5 - a * 0.04); ctx.fill();
   ctx.save(); ctx.translate(gx, gy - a); ctx.scale(1.2, 1.2);
-  if (P.invT > 0 && P.mode !== 'dead' && P.mode !== 'hit' && Math.floor(P.invT * 10) % 2 === 0) ctx.globalAlpha = 0.35;
+  if (P.invT > 0 && P.mode !== 'dead' && Math.floor(P.invT * 10) % 2 === 0) ctx.globalAlpha = 0.35;
 
   if (P.mode === 'dead') { drawDead(); ctx.restore(); return; }
-  const knocked = P.mode === 'hit';
-  if (knocked) {
-    const k = 1 - P.hitT / HIT_TIME;
-    if (k < 0.45) {
-      // impact burst behind the pigeon
-      ctx.save(); ctx.translate(-4, -16); ctx.globalAlpha = 1 - k / 0.45;
-      const R = 14 + k * 30;
-      ctx.fillStyle = '#fff4c2'; ctx.beginPath();
-      for (let i = 0; i < 16; i++) { const rr = i % 2 ? R * 0.45 : R, aa = i * Math.PI / 8; ctx.lineTo(Math.cos(aa) * rr, Math.sin(aa) * rr); }
-      ctx.fill(); ctx.restore();
-    }
-    // one backward tumble around the body
-    ctx.translate(0, -14); ctx.rotate(-k * TAU); ctx.translate(0, 14);
-  }
 
   const walking = P.mode === 'walk' && a < 3;
   const flying = P.mode === 'fly' || a > 3;
@@ -1245,13 +1211,8 @@ function drawPigeon(gx, gy) {
 
   ctx.save(); ctx.translate(hx, hy); ctx.rotate(P.hr);
   ctx.fillStyle = '#6c7480'; circ(0, 0, 5.8); ctx.fill();
-  if (knocked) {
-    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.1; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(0.2, -2.8); ctx.lineTo(3.2, 0.2); ctx.moveTo(3.2, -2.8); ctx.lineTo(0.2, 0.2); ctx.stroke();
-  } else {
-    ctx.fillStyle = '#f08a24'; circ(1.6, -1.2, 2); ctx.fill();
-    ctx.fillStyle = '#111'; circ(1.9, -1.2, 0.95); ctx.fill();
-  }
+  ctx.fillStyle = '#f08a24'; circ(1.6, -1.2, 2); ctx.fill();
+  ctx.fillStyle = '#111'; circ(1.9, -1.2, 0.95); ctx.fill();
   ctx.fillStyle = '#3a3a3a'; ctx.beginPath(); ctx.moveTo(4.8, -0.6); ctx.lineTo(10.5, 1.3); ctx.lineTo(4.8, 2.2); ctx.fill();
   ctx.fillStyle = '#ece7de'; ell(5.6, -0.4, 1.7, 1.1); ctx.fill();
   ctx.restore();
@@ -1282,7 +1243,7 @@ function drawPigeon(gx, gy) {
   }
 
   // dizzy stars after a hit
-  if (P.dizzyT > 0 && !knocked) {
+  if (P.dizzyT > 0) {
     ctx.save(); ctx.globalAlpha = clamp(P.dizzyT * 2, 0, 1);
     for (let i = 0; i < 3; i++) {
       const ang = worldT * 7 + i * TAU / 3;
@@ -1323,8 +1284,7 @@ function drawDead() {
 }
 
 function draw() {
-  const shake = P.shakeT > 0 ? P.shakeT / 0.35 * 6 : 0;
-  ctx.setTransform(DPR * S, 0, 0, DPR * S, DPR * S * rand(-shake, shake), DPR * S * rand(-shake, shake));
+  ctx.setTransform(DPR * S, 0, 0, DPR * S, 0, 0);
   ctx.fillStyle = '#2a2c30'; ctx.fillRect(0, 0, VW, VH);
   const vis = s => s.x + s.w > camX - 40 && s.x < camX + VW + 40;
   for (const s of strips) if (vis(s)) drawStrip(s, Math.round(s.x - camX));
@@ -1363,11 +1323,6 @@ function draw() {
   }
   const here = hereDistrict();
   if (here && here.snow) drawSnow();
-  if (P.flashT > 0) {
-    const g = ctx.createRadialGradient(VW / 2, VH / 2, Math.min(VW, VH) * 0.3, VW / 2, VH / 2, Math.max(VW, VH) * 0.75);
-    g.addColorStop(0, 'rgba(226,72,58,0)'); g.addColorStop(1, `rgba(226,72,58,${0.55 * P.flashT / 0.45})`);
-    ctx.fillStyle = g; ctx.fillRect(-10, -10, VW + 20, VH + 20);
-  }
 }
 
 const FLAKES = Array.from({ length: 70 }, () => ({ x: Math.random(), y: Math.random(), s: rand(0.5, 1.2) }));
