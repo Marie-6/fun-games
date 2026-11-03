@@ -257,19 +257,51 @@ const P = {};
 function districtFor(n) { return ORDER[Math.min(Math.floor(n / 4), ORDER.length - 1)]; }
 function diff() { return roadNum; }
 
-function decos(w) {
-  const list = [];
-  const d = curDistrict;
-  const n = Math.floor(rand(2, 5));
+// Half-width and half-height of each decoration, used to keep things from overlapping.
+const DECO_SIZE = {
+  hydrant: [11, 8], lamp: [9, 9], trash: [12, 12], tree: [26, 26], bench: [9, 23], lantern: [40, 14],
+  crate: [11, 11], sign: [18, 30], stoop: [15, 19], npc: [17, 20], fountain: [45, 46], arch: [36, 13],
+  chess: [25, 14], umbrella: [26, 26], towel: [10, 19], snowman: [14, 14], xmas: [30, 30], planter: [13, 13],
+  cafe: [19, 10], lights: [40, 15], flag: [27, 8],
+};
+// String lanterns and lights hang overhead: people walk under them, so they're drawn above people.
+const OVERHEAD = { lantern: true, lights: true };
+const PED_RX = 17, PED_RY = 17, WALKWAY = PED_RX * 2 + 2;
+const overlaps = (a, b, pad = 0) => Math.abs(a.x - b.x) < a.rx + b.rx + pad && Math.abs(a.y - b.y) < a.ry + b.ry + pad;
+
+// A box fits if it touches nothing and people still have a walkway at least WALKWAY wide past it.
+function fits(boxes, box, w) {
+  if (boxes.some(o => overlaps(o, box, 6))) return false;
+  if (box.overhead) return true;
+  const near = boxes.filter(o => !o.overhead && Math.abs(o.y - box.y) < o.ry + box.ry + PED_RY * 2).concat(box)
+    .map(o => [o.x - o.rx, o.x + o.rx]).sort((a, b) => a[0] - b[0]);
+  let edge = 0, widest = 0;
+  for (const [a, b] of near) { widest = Math.max(widest, a - edge); edge = Math.max(edge, b); }
+  return Math.max(widest, w - edge) >= WALKWAY;
+}
+
+// Decorations stay out of the pigeon's row, never overlap, and always leave room to walk by.
+function placeDecos(list, w, kinds, n) {
+  const boxes = list.map(dc => decoBox(dc, w));
+  let big = list.some(dc => dc.kind === 'fountain' || dc.kind === 'arch');
   for (let i = 0; i < n; i++) {
-    let f = Math.random() < 0.5 ? rand(0.04, 0.46) : rand(0.72, 0.96);
-    let kind = pick(d.deco);
-    const big = kind === 'fountain' || kind === 'arch';
-    if (big && w < 130) kind = 'npc';
-    list.push({ kind, fx: big ? 0.5 : rand(0.2, 0.8), fy: f, seed: Math.random() });
+    let kind = pick(kinds);
+    if (kind === 'fountain' || kind === 'arch') { if (big || w < 130) kind = 'npc'; else big = true; }
+    const [rx, ry] = DECO_SIZE[kind];
+    for (let tries = 0; tries < 25; tries++) {
+      const y = Math.random() < 0.5 ? rand(0.04, 0.46) * VH : rand(0.72, 0.96) * VH;
+      const x = rand(rx - 6, Math.max(rx - 6, w - rx + 6));
+      const box = { x, y, rx, ry, overhead: !!OVERHEAD[kind] };
+      if ((y - ry > ROW + 12 || y + ry < ROW - 40) && fits(boxes, box, w)) {
+        boxes.push(box);
+        list.push({ kind, fx: x / w, fy: y / VH, seed: Math.random() });
+        break;
+      }
+    }
   }
   return list;
 }
+function decoBox(dc, w) { const [rx, ry] = DECO_SIZE[dc.kind]; return { x: dc.fx * w, y: dc.fy * VH, rx, ry, overhead: !!OVERHEAD[dc.kind] }; }
 let curDistrict = MIDTOWN;
 
 const VSIZE = { bus: [150, 44], carriage: [120, 30], ebike: [30, 14], icecream: [84, 38] };
@@ -353,26 +385,79 @@ function makePed(s, edge) {
   };
 }
 
+// Everything a person on this sidewalk has to walk around, in the sidewalk's own x.
+function obstacles(s, skip) {
+  const list = s.decos.map(dc => decoBox(dc, s.w)).filter(o => !o.overhead);
+  for (const c of crusts) if (!c.taken && c.x > s.x && c.x < s.x + s.w) list.push(crustBox(c, s.x));
+  for (const o of s.peds) if (o !== skip) list.push({ x: o.x - s.x, y: o.y, rx: PED_RX, ry: PED_RY, ped: o });
+  return list;
+}
+const pedBox = (s, x, y) => ({ x: x - s.x, y, rx: PED_RX, ry: PED_RY });
+
+function addPed(s, edge) {
+  const obs = obstacles(s);
+  for (let tries = 0; tries < 20; tries++) {
+    const p = makePed(s, edge);
+    if (!obs.some(o => overlaps(o, pedBox(s, p.x, p.y), 2))) { s.peds.push(p); return true; }
+  }
+  return false;
+}
+
+function walkPed(s, p, dt) {
+  const obs = obstacles(s, p);
+  // Anything already touching (e.g. after a resize) is ignored so the person can step away from it.
+  const touching = obs.filter(o => overlaps(o, pedBox(s, p.x, p.y), 1));
+  // Walking forward only people ahead count (the one behind waits); stepping sideways everyone counts.
+  const blocked = (x, y, fwd) => obs.some(o => !touching.includes(o) && overlaps(o, pedBox(s, x, y), 1) && (!fwd || !o.ped || p.dir * (o.y - p.y) > -4));
+  // Look a little way ahead and slide sideways to the nearest clear path.
+  const ahead = obs.filter(o => { const dy = p.dir * (o.y - p.y); return dy > -(o.ry + PED_RY) && dy < o.ry + PED_RY + 60; });
+  const clear = x => !ahead.some(o => Math.abs(o.x - (x - s.x)) < o.rx + PED_RX + 1);
+  let target = p.x;
+  if (!clear(p.x)) {
+    target = null;
+    for (let k = 2; k < s.w; k += 2) {
+      for (const side of p.dir > 0 ? [-1, 1] : [1, -1]) {
+        const x = p.x + side * k;
+        if (x - s.x >= PED_RX - 4 && x - s.x <= s.w - PED_RX + 4 && clear(x)) { target = x; break; }
+      }
+      if (target !== null) break;
+    }
+  }
+  if (target !== null && target !== p.x) {
+    const nx = p.x + clamp(target - p.x, -90 * dt, 90 * dt);
+    if (!blocked(nx, p.y, false)) p.x = nx;
+  }
+  const ny = p.y + p.dir * p.speed * dt;
+  if (!blocked(p.x, ny, true)) { p.y = ny; p.waitT = 0; }
+  else if ((p.waitT = (p.waitT || 0) + dt) > 2) { p.dir *= -1; p.waitT = 0; }
+}
+
 function genWalk() {
   const d = curDistrict;
   const ground = pick(d.ground);
   const park = ground === 'park';
   const wide = d.wide || (park ? [150, 200] : [80, 104]);
   const s = { type: park ? 'park' : 'walk', ground, x: genX, w: rand(wide[0], wide[1]), district: d, peds: [], timer: 0, decos: [] };
-  s.decos = decos(s.w);
-  if (s.w > 130) s.decos = s.decos.concat(decos(s.w));
+  s.decos = placeDecos([], s.w, d.deco, Math.floor(rand(2, 5)) * (s.w > 130 ? 2 : 1));
+  for (let k = 0; k < (d.crust || 1); k++) {
+    if (Math.random() > (park ? 0.7 : 0.45)) continue;
+    const boxes = crusts.filter(c => c.x > s.x && c.x < s.x + s.w).map(c => crustBox(c, s.x));
+    for (let tries = 0; tries < 15; tries++) {
+      const c = { x: s.x + rand(14, s.w - 14), taken: false };
+      if (fits(boxes, crustBox(c, s.x), s.w)) { crusts.push(c); break; }
+    }
+  }
   const busy = (d.busy || 1) * (park ? 2.2 : 1) * LV.ped;
   // A fixed headcount per sidewalk keeps people a side hazard; cars stay the main danger.
   s.target = Math.max(1, Math.round(VH / 420 / busy));
-  for (let i = 0; i < s.target; i++) s.peds.push(makePed(s, false));
+  for (let i = 0; i < s.target; i++) addPed(s, false);
   s.busy = busy;
   s.timer = rand(0.5, 2);
   strips.push(s);
-  for (let k = 0; k < (d.crust || 1); k++) {
-    if (Math.random() < (park ? 0.7 : 0.45)) crusts.push({ x: s.x + rand(14, s.w - 14), taken: false });
-  }
   genX += s.w;
 }
+
+function crustBox(c, x0) { return { x: c.x - x0, y: ROW - 2, rx: 12, ry: 9 }; }
 
 function genUntil(x) {
   while (genX < x) { if (nextRoad) genRoad(); else genWalk(); nextRoad = !nextRoad; }
@@ -384,7 +469,7 @@ function resetWorld() {
   genX = -700;
   strips.push({ type: 'walk', plaza: true, x: genX, w: 900, district: MIDTOWN, peds: [], timer: 1e9, decos: [] });
   const plaza = strips[0];
-  for (let i = 0; i < 7; i++) plaza.decos.push({ kind: pick(['hydrant', 'lamp', 'trash', 'tree']), fx: rand(0.05, 0.95), fy: Math.random() < 0.5 ? rand(0.05, 0.44) : rand(0.74, 0.95), seed: Math.random() });
+  placeDecos(plaza.decos, plaza.w, ['hydrant', 'lamp', 'trash', 'tree'], 7);
   crusts.push({ x: 90, taken: false });
   genX = 200;
   nextRoad = true;
@@ -616,13 +701,13 @@ function updateWorld(dt) {
     } else if (s.peds) {
       for (const p of s.peds) {
         if (p.pause > 0) { p.pause -= dt; continue; }
-        p.y += p.dir * p.speed * dt;
+        walkPed(s, p, dt);
         p.step += dt * (p.kind === 'jogger' ? 14 : 8);
         if ((p.kind === 'phone' || p.kind === 'tourist') && Math.random() < dt * 0.25) p.pause = rand(0.8, 2);
       }
       s.peds = s.peds.filter(p => p.y > -60 && p.y < VH + 60);
       s.timer -= dt;
-      if (s.timer <= 0 && s.peds.length < s.target) { s.peds.push(makePed(s, true)); s.timer = rand(1, 3); }
+      if (s.timer <= 0 && s.peds.length < s.target) { s.timer = addPed(s, true) ? rand(1, 3) : 0.5; }
     }
   }
   for (const q of parts) {
@@ -938,7 +1023,7 @@ function drawStrip(s, x) {
     else ctx.fillRect(x + s.w / 2, 0, 1.5, VH);
     ctx.fillStyle = d.curb; ctx.fillRect(x, 0, 5, VH); ctx.fillRect(x + s.w - 5, 0, 5, VH);
   }
-  for (const dc of s.decos) drawDeco(dc, x + dc.fx * s.w, dc.fy * VH);
+  for (const dc of s.decos) if (!OVERHEAD[dc.kind]) drawDeco(dc, x + dc.fx * s.w, dc.fy * VH);
 }
 
 function drawVehicle(v, ln, x) {
@@ -1211,6 +1296,10 @@ function draw() {
   for (const s of strips) {
     if (!vis(s)) continue;
     if (s.peds) for (const p of s.peds) drawPed(p, p.x - camX);
+  }
+  for (const s of strips) {
+    if (!vis(s) || !s.decos) continue;
+    for (const dc of s.decos) if (OVERHEAD[dc.kind]) drawDeco(dc, Math.round(s.x - camX) + dc.fx * s.w, dc.fy * VH);
   }
   for (const s of strips) {
     if (!vis(s) || s.type !== 'road') continue;
