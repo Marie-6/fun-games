@@ -477,7 +477,7 @@ function resetWorld() {
   Object.assign(P, {
     x: 0, alt: 0, mode: 'stop', phase: 0, stopT: 1e9, stamina: 100,
     hx: 0, hy: 0, hr: 0, tx: 0, ty: 0, tr: 0, lookT: 0, peckT: 0, flapT: 0,
-    deadT: 0, cause: '', squash: false, cooT: rand(2, 4), bubbleT: 0, flinchT: 0, invT: 0, dizzyT: 0,
+    deadT: 0, cause: '', squash: false, cooT: rand(2, 4), bubbleT: 0, flinchT: 0, invT: 0, dizzyT: 0, hitT: 0,
   });
   camX = P.x - VW * 0.28;
   genUntil(camX + VW + 400);
@@ -503,7 +503,7 @@ function release() {
   if (!held) return;
   held = false;
   if (ignoreHold) { ignoreHold = false; return; }
-  if (state !== 'play') return;
+  if (state !== 'play' || P.mode === 'hit') return;
   // A tap toggles stop/walk; releasing a hold always walks on.
   const wasHold = now() - pressAt >= 0.17;
   if (P.mode === 'fly' || (wasHold && P.mode === 'stop') || (!wasHold && wasStopped)) P.mode = 'walk';
@@ -567,7 +567,8 @@ function die(by) {
 
 function hurt(by) {
   lives--;
-  P.mode = 'walk'; P.invT = 2; P.dizzyT = 1.6;
+  // Stunned in place for a moment; the blinking and dizzy stars start right away.
+  P.mode = 'hit'; P.hitT = 0.6; P.invT = 2; P.dizzyT = 1.6;
   tone(520, 180, 0.18, 'square', 0.07); sfx.coo();
   for (let i = 0; i < 6; i++) {
     parts.push({ kind: 'feather', x: P.x, y: ROW - 14 - P.alt, vx: rand(-60, 60), vy: rand(-110, -30), r: rand(0, TAU), vr: rand(-6, 6), life: rand(1, 1.6), c: pick(['#a3abb4', '#858e98', '#d7dbe0']) });
@@ -629,7 +630,7 @@ function updatePigeon(dt) {
   const t = now();
   if (P.mode === 'dead') { P.deadT += dt; P.alt = Math.max(0, P.alt - dt * 120); return; }
 
-  if (state === 'play' && held && !ignoreHold && P.mode !== 'fly' && t - pressAt > 0.17 && P.stamina > 4) {
+  if (state === 'play' && held && !ignoreHold && P.mode !== 'fly' && P.mode !== 'hit' && t - pressAt > 0.17 && P.stamina > 4) {
     P.mode = 'fly'; P.flapT = 0; sfx.flap();
   }
 
@@ -650,6 +651,12 @@ function updatePigeon(dt) {
     }
     const k = Math.min(1, dt * 28);
     P.hx += (P.tx - P.hx) * k; P.hy += (P.ty - P.hy) * k; P.hr += (P.tr - P.hr) * k;
+  } else if (P.mode === 'hit') {
+    // stands still, head pulled back, until the stun wears off
+    P.hitT -= dt;
+    const k = Math.min(1, dt * 20);
+    P.hx += (-3 - P.hx) * k; P.hy += (1 - P.hy) * k; P.hr += (0 - P.hr) * k;
+    if (P.hitT <= 0) P.mode = 'walk';
   } else if (P.mode === 'fly') {
     P.x += FLY * dt;
     P.flapT += dt;
