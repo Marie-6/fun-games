@@ -66,6 +66,8 @@ canvas{display:block;width:100%;height:100%}
 .modes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .mode{pointer-events:auto;font-family:var(--display);font-size:17px;color:var(--ink);background:var(--paper);border:0;border-radius:6px;padding:10px 4px 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;box-shadow:0 3px 0 var(--steel)}
 .mode small{font:600 11px var(--body);color:#5a5650}
+.go.start{pointer-events:auto;border:0;width:100%;cursor:pointer;margin-top:10px}
+.go.start:focus-visible{outline:3px solid var(--paper);outline-offset:2px}
 .mode.sel{background:var(--cab);box-shadow:0 3px 0 #b88d00}
 .mode:active{transform:translateY(2px);box-shadow:0 1px 0 var(--steel)}
 .mode:focus-visible,.link:focus-visible{outline:3px solid var(--cab);outline-offset:2px}
@@ -114,7 +116,8 @@ canvas{display:block;width:100%;height:100%}
           <button type="button" class="mode" data-level="medium">Medium<small>Normal day</small></button>
           <button type="button" class="mode" data-level="hard">Hard<small>Rush hour</small></button>
         </div>
-        <p class="label" style="text-align:center">Pick a mode to start</p>
+        <button type="button" class="go start" id="startBtn">Start <span id="startLevel">Medium</span></button>
+        <p class="label" style="text-align:center">Pick a mode, then press Start or Space</p>
       </div>
     </div>
   </div>
@@ -249,6 +252,7 @@ function setLevel(k) {
   levelKey = k; LV = LEVELS[k];
   try { localStorage.setItem('pigeons-ny-level', k); } catch (e) {}
   document.querySelectorAll('.mode').forEach(b => b.classList.toggle('sel', b.dataset.level === k));
+  $('startLevel').textContent = LV.label;
 }
 
 let strips, crusts, parts, genX, roadNum, nextRoad, camX, score, crustCount, state, overT, worldT, lives = 3, shownLives = -1, nextLifeAt = 10, lifeStep = 10;
@@ -1365,8 +1369,11 @@ function frame(t) {
 
 document.querySelectorAll('.mode').forEach(b => {
   b.addEventListener('pointerdown', e => e.stopPropagation());
-  b.addEventListener('click', e => { e.stopPropagation(); audio(); setLevel(b.dataset.level); start(); });
+  // Picking a mode only selects it; the game begins with Start (or Space).
+  b.addEventListener('click', e => { e.stopPropagation(); audio(); setLevel(b.dataset.level); b.blur(); });
 });
+$('startBtn').addEventListener('pointerdown', e => e.stopPropagation());
+$('startBtn').addEventListener('click', e => { e.stopPropagation(); audio(); $('startBtn').blur(); start(); });
 $('changeMode').addEventListener('pointerdown', e => e.stopPropagation());
 $('changeMode').addEventListener('click', e => {
   e.stopPropagation();
