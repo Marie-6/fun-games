@@ -559,7 +559,7 @@ const CAUSES = {
 
 function die(by) {
   P.mode = 'dead'; P.deadT = 0; P.alt = Math.min(P.alt, 30);
-  P.squash = by === 'taxi' || by === 'car';
+  P.squash = true;
   P.cause = CAUSES[by] || 'Squashed.';
   sfx.splat();
   for (let i = 0; i < 18; i++) {
@@ -1274,24 +1274,15 @@ function drawPigeon(gx, gy) {
 
 function drawDead() {
   const tw = Math.sin(P.deadT * 30) * Math.max(0, 1 - P.deadT) * 2;
-  if (P.squash) {
-    ctx.fillStyle = '#9aa2ab'; ell(-2, -2.5, 22, 4); ctx.fill();
-    ctx.fillStyle = '#80899a'; ell(-12, -3, 14, 3, 0.2); ctx.fill(); ell(8, -3, 12, 3, -0.2); ctx.fill();
-    ctx.fillStyle = '#4f9374'; ell(16, -3, 5, 3); ctx.fill();
-    ctx.fillStyle = '#6c7480'; ell(22, -3, 6, 3.5); ctx.fill();
-    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.moveTo(21, -5); ctx.lineTo(24, -2); ctx.moveTo(24, -5); ctx.lineTo(21, -2); ctx.stroke();
-    ctx.fillStyle = '#3a3a3a'; ctx.beginPath(); ctx.moveTo(27, -4); ctx.lineTo(32, -3); ctx.lineTo(27, -1.5); ctx.fill();
-    ctx.strokeStyle = '#d96f68'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(-10, 4 + tw); ctx.moveTo(-1, -2); ctx.lineTo(1, 5 - tw); ctx.stroke();
-  } else {
-    ctx.fillStyle = '#a3abb4'; ell(0, -8, 14, 8); ctx.fill();
-    ctx.fillStyle = '#87909a'; ell(-3, -6, 10, 5); ctx.fill();
-    ctx.fillStyle = '#6c7480'; circ(15, -5, 5.5); ctx.fill();
-    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.moveTo(13.5, -7); ctx.lineTo(16.5, -4); ctx.moveTo(16.5, -7); ctx.lineTo(13.5, -4); ctx.stroke();
-    ctx.strokeStyle = '#d96f68'; ctx.lineWidth = 2.2;
-    ctx.beginPath(); ctx.moveTo(-3, -15); ctx.lineTo(-5 + tw, -25); ctx.lineTo(-8 + tw, -26); ctx.moveTo(3, -15); ctx.lineTo(4 - tw, -25); ctx.lineTo(7 - tw, -26); ctx.stroke();
-  }
+  // Every death looks the same: flattened on the ground.
+  ctx.fillStyle = '#9aa2ab'; ell(-2, -2.5, 22, 4); ctx.fill();
+  ctx.fillStyle = '#80899a'; ell(-12, -3, 14, 3, 0.2); ctx.fill(); ell(8, -3, 12, 3, -0.2); ctx.fill();
+  ctx.fillStyle = '#4f9374'; ell(16, -3, 5, 3); ctx.fill();
+  ctx.fillStyle = '#6c7480'; ell(22, -3, 6, 3.5); ctx.fill();
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(21, -5); ctx.lineTo(24, -2); ctx.moveTo(24, -5); ctx.lineTo(21, -2); ctx.stroke();
+  ctx.fillStyle = '#3a3a3a'; ctx.beginPath(); ctx.moveTo(27, -4); ctx.lineTo(32, -3); ctx.lineTo(27, -1.5); ctx.fill();
+  ctx.strokeStyle = '#d96f68'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-6, -2); ctx.lineTo(-10, 4 + tw); ctx.moveTo(-1, -2); ctx.lineTo(1, 5 - tw); ctx.stroke();
 }
 
 function draw() {
