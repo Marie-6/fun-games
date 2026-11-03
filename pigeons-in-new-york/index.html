@@ -595,8 +595,9 @@ function updateWorld(dt) {
         if (ln.timer <= 0) {
           const v = makeVehicle(roadNum, s.district);
           v.y = ln.dir > 0 ? -v.len / 2 - 30 : VH + v.len / 2 + 30;
-          const last = ln.vehicles[ln.vehicles.length - 1];
-          if (!last || Math.abs(last.y - v.y) > last.len / 2 + v.len / 2 + 24) {
+          // Check every car in the lane, not just the newest: the starting cars are stored in the other order.
+          const clear = Math.max(40, ln.speed * LV.minT);
+          if (ln.vehicles.every(o => Math.abs(o.y - v.y) > o.len / 2 + v.len / 2 + clear)) {
             ln.vehicles.push(v);
             ln.timer = (gap(roadNum, ln.speed) + v.len) / ln.speed;
           } else ln.timer = 0.2;
