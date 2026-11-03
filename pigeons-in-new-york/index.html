@@ -304,9 +304,12 @@ function genRoad() {
   const split = Math.ceil(n / 2);
   const island = n >= 3 || (twoWay && Math.random() < 0.5) ? { x: genX + split * LANE, split } : null;
   const lanes = [];
+  // Each lane gets its own speed so neighbouring cars don't drive side by side.
+  const baseSpeed = Math.min(340, rand(85, 135) + d * 7);
+  const paces = shuffle([0.7, 0.87, 1.03, 1.2]);
   for (let i = 0; i < n; i++) {
     const dir = twoWay ? (i < n / 2 ? -1 : 1) : oneDir;
-    const ln = { x: genX + i * LANE + (island && i >= split ? ISLE : 0), w: LANE, dir, speed: Math.min(340, rand(85, 135) + d * 7) * LV.speed, vehicles: [], timer: 0, manhole: Math.random() < 0.4 ? Math.random() : -1 };
+    const ln = { x: genX + i * LANE + (island && i >= split ? ISLE : 0), w: LANE, dir, speed: baseSpeed * paces[i] * LV.speed, vehicles: [], timer: 0, manhole: Math.random() < 0.4 ? Math.random() : -1 };
     let y = -220 + rand(0, 200);
     while (y < VH + 220) {
       const v = makeVehicle(d, curDistrict); v.y = y + v.len / 2; ln.vehicles.push(v); y += v.len + gap(d, ln.speed);
