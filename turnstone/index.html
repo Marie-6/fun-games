@@ -1,0 +1,1506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Turnstone</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus+SC&family=Karla:wght@400;600&display=swap">
+<style>
+/* Layout: one full-bleed canvas; quiet inscription-style UI floats in the corners. Single dawn look. */
+:root{
+  --sky-top:#ecd3c3; --sky-low:#b9c6d0; --ink:#3b3444; --ink-soft:#6d6478;
+  --stone:#f3eadc; --verdigris:#5f9f95; --saffron:#eeaa34; --cloak:#b5463b;
+  --card:rgba(250,245,238,.72); --line:rgba(59,52,68,.14);
+  --display:"Marcellus SC","Trajan Pro",Georgia,serif;
+  --body:"Karla","Helvetica Neue",Arial,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--sky-low);color:var(--ink);font:14px/1.45 var(--body)}
+canvas#game{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.hud{position:fixed;top:max(18px,env(safe-area-inset-top));left:max(20px,env(safe-area-inset-left));max-width:min(420px,calc(100vw - 40px));pointer-events:none}
+.eyebrow{font:600 11px/1 var(--body);letter-spacing:.22em;text-transform:uppercase;color:var(--ink-soft)}
+h1{font:400 clamp(26px,4vw,40px)/1.05 var(--display);margin:.3em 0 .25em;letter-spacing:.04em;text-wrap:balance}
+.hint{margin:0;max-width:34ch;color:var(--ink);opacity:.85}
+.cam{position:fixed;top:max(16px,env(safe-area-inset-top));right:max(16px,env(safe-area-inset-right));width:212px;background:var(--card);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:8px}
+.cam canvas{width:196px;height:147px;border-radius:6px;background:#2e2a35;display:block}
+.chips{display:flex;gap:6px}
+.chip{flex:1;display:flex;align-items:center;gap:6px;font:600 11px/1 var(--body);letter-spacing:.04em;padding:6px 7px;border-radius:999px;border:1px solid var(--line);color:var(--ink-soft);transition:background .2s,color .2s}
+.chip b{font:400 13px/1 var(--display);width:18px;height:18px;border-radius:50%;display:grid;place-items:center;background:var(--ink);color:var(--stone)}
+.chip.on{color:var(--ink);background:rgba(255,255,255,.7)}
+.chip.on.turn b{background:var(--verdigris)} .chip.on.walk b{background:var(--saffron);color:var(--ink)}
+button{font:600 12px/1 var(--body);letter-spacing:.06em;color:var(--stone);background:var(--ink);border:0;border-radius:999px;padding:9px 14px;cursor:pointer}
+button.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button:focus-visible{outline:2px solid var(--saffron);outline-offset:2px}
+.camnote{font-size:11.5px;line-height:1.4;color:var(--ink-soft);margin:0}
+.foot{position:fixed;left:max(20px,env(safe-area-inset-left));right:max(20px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;pointer-events:none}
+.foot>*{pointer-events:auto}
+.dots{display:flex;gap:8px;align-items:center}
+.dot{width:9px;height:9px;border-radius:50%;border:1px solid var(--ink-soft)}
+.dot.done{background:var(--ink-soft)} .dot.now{background:var(--saffron);border-color:var(--saffron)}
+.keys{font-size:12px;color:var(--ink-soft)}
+.keys kbd{font:600 11px/1 var(--body);padding:2px 5px;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.5)}
+.veil{position:fixed;inset:0;display:grid;place-items:center;pointer-events:none;opacity:0;transition:opacity .8s}
+.veil.show{opacity:1}
+.veil div{text-align:center;font:400 clamp(28px,5vw,52px)/1.1 var(--display);letter-spacing:.06em;color:var(--ink);text-shadow:0 2px 30px rgba(255,240,220,.9)}
+.veil small{display:block;margin-top:.6em;font:600 12px/1 var(--body);letter-spacing:.24em;text-transform:uppercase;color:var(--ink-soft)}
+@media (max-width:640px){.cam{width:150px}.cam canvas{width:134px;height:100px}.chip{font-size:10px;padding:5px}.hud{max-width:calc(100vw - 190px)}h1{font-size:24px}.hint{font-size:12.5px}.keys{display:none}}
+@media (prefers-reduced-motion:reduce){.veil{transition:none}}
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="Turnstone puzzle"></canvas>
+
+<div class="hud">
+  <div class="eyebrow" id="lvlnum">Level I</div>
+  <h1 id="lvlname">The Bridge</h1>
+  <p class="hint" id="hint"></p>
+</div>
+
+<div class="cam">
+  <canvas id="preview" width="392" height="294"></canvas>
+  <div class="chips">
+    <div class="chip turn" id="chip8"><b>8</b>turn</div>
+    <div class="chip walk" id="chip9"><b>9</b>walk</div>
+  </div>
+  <button id="camBtn">Start camera</button>
+  <p class="camnote" id="camNote">Hold marker 8 and twist it to turn. Point marker 9 at a tile and hold still to walk there.</p>
+</div>
+
+<div class="foot">
+  <div class="dots" id="dots"></div>
+  <div class="keys">No markers? Click a tile to walk · drag the dial or <kbd>Q</kbd> <kbd>E</kbd> to turn · <kbd>F</kbd> flips turn direction · <kbd>R</kbd> restart</div>
+  <button class="ghost" id="resetBtn">Restart level</button>
+</div>
+
+<div class="veil" id="veil"><div id="veilText">The way opens<small>next path</small></div></div>
+
+<script>
+/*
+Copyright (c) 2011 Juan Mellado
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+/*
+References:
+- "OpenCV: Open Computer Vision Library"
+  http://sourceforge.net/projects/opencvlibrary/
+- "Stack Blur: Fast But Goodlooking"
+  http://incubator.quasimondo.com/processing/fast_blur_deluxe.php
+*/
+
+var CV = CV || {};
+
+CV.Image = function(width, height, data){
+  this.width = width || 0;
+  this.height = height || 0;
+  this.data = data || [];
+};
+
+CV.grayscale = function(imageSrc, imageDst){
+  var src = imageSrc.data, dst = imageDst.data, len = src.length,
+      i = 0, j = 0;
+
+  for (; i < len; i += 4){
+    dst[j ++] =
+      (src[i] * 0.299 + src[i + 1] * 0.587 + src[i + 2] * 0.114 + 0.5) & 0xff;
+  }
+  
+  imageDst.width = imageSrc.width;
+  imageDst.height = imageSrc.height;
+  
+  return imageDst;
+};
+
+CV.threshold = function(imageSrc, imageDst, threshold){
+  var src = imageSrc.data, dst = imageDst.data,
+      len = src.length, tab = [], i;
+
+  for (i = 0; i < 256; ++ i){
+    tab[i] = i <= threshold? 0: 255;
+  }
+
+  for (i = 0; i < len; ++ i){
+    dst[i] = tab[ src[i] ];
+  }
+
+  imageDst.width = imageSrc.width;
+  imageDst.height = imageSrc.height;
+
+  return imageDst;
+};
+
+CV.adaptiveThreshold = function(imageSrc, imageDst, kernelSize, threshold){
+  var src = imageSrc.data, dst = imageDst.data, len = src.length, tab = [], i;
+
+  CV.stackBoxBlur(imageSrc, imageDst, kernelSize);
+
+  for (i = 0; i < 768; ++ i){
+    tab[i] = (i - 255 <= -threshold)? 255: 0;
+  }
+
+  for (i = 0; i < len; ++ i){
+    dst[i] = tab[ src[i] - dst[i] + 255 ];
+  }
+
+  imageDst.width = imageSrc.width;
+  imageDst.height = imageSrc.height;
+  
+  return imageDst;
+};
+
+CV.otsu = function(imageSrc){
+  var src = imageSrc.data, len = src.length, hist = [],
+      threshold = 0, sum = 0, sumB = 0, wB = 0, wF = 0, max = 0,
+      mu, between, i;
+
+  for (i = 0; i < 256; ++ i){
+    hist[i] = 0;
+  }
+  
+  for (i = 0; i < len; ++ i){
+    hist[ src[i] ] ++;
+  }
+
+  for (i = 0; i < 256; ++ i){
+    sum += hist[i] * i;
+  }
+
+  for (i = 0; i < 256; ++ i){
+    wB += hist[i];
+    if (0 !== wB){
+    
+      wF = len - wB;
+      if (0 === wF){
+        break;
+      }
+
+      sumB += hist[i] * i;
+      
+      mu = (sumB / wB) - ( (sum - sumB) / wF );
+
+      between = wB * wF * mu * mu;
+      
+      if (between > max){
+        max = between;
+        threshold = i;
+      }
+    }
+  }
+
+  return threshold;
+};
+
+CV.stackBoxBlurMult =
+  [1, 171, 205, 293, 57, 373, 79, 137, 241, 27, 391, 357, 41, 19, 283, 265];
+
+CV.stackBoxBlurShift =
+  [0, 9, 10, 11, 9, 12, 10, 11, 12, 9, 13, 13, 10, 9, 13, 13];
+
+CV.BlurStack = function(){
+  this.color = 0;
+  this.next = null;
+};
+
+CV.stackBoxBlur = function(imageSrc, imageDst, kernelSize){
+  var src = imageSrc.data, dst = imageDst.data,
+      height = imageSrc.height, width = imageSrc.width,
+      heightMinus1 = height - 1, widthMinus1 = width - 1,
+      size = kernelSize + kernelSize + 1, radius = kernelSize + 1,
+      mult = CV.stackBoxBlurMult[kernelSize],
+      shift = CV.stackBoxBlurShift[kernelSize],
+      stack, stackStart, color, sum, pos, start, p, x, y, i;
+
+  stack = stackStart = new CV.BlurStack();
+  for (i = 1; i < size; ++ i){
+    stack = stack.next = new CV.BlurStack();
+  }
+  stack.next = stackStart;
+
+  pos = 0;
+
+  for (y = 0; y < height; ++ y){
+    start = pos;
+    
+    color = src[pos];
+    sum = radius * color;
+    
+    stack = stackStart;
+    for (i = 0; i < radius; ++ i){
+      stack.color = color;
+      stack = stack.next;
+    }
+    for (i = 1; i < radius; ++ i){
+      stack.color = src[pos + i];
+      sum += stack.color;
+      stack = stack.next;
+    }
+  
+    stack = stackStart;
+    for (x = 0; x < width; ++ x){
+      dst[pos ++] = (sum * mult) >>> shift;
+      
+      p = x + radius;
+      p = start + (p < widthMinus1? p: widthMinus1);
+      sum -= stack.color - src[p];
+      
+      stack.color = src[p];
+      stack = stack.next;
+    }
+  }
+
+  for (x = 0; x < width; ++ x){
+    pos = x;
+    start = pos + width;
+    
+    color = dst[pos];
+    sum = radius * color;
+    
+    stack = stackStart;
+    for (i = 0; i < radius; ++ i){
+      stack.color = color;
+      stack = stack.next;
+    }
+    for (i = 1; i < radius; ++ i){
+      stack.color = dst[start];
+      sum += stack.color;
+      stack = stack.next;
+      
+      start += width;
+    }
+    
+    stack = stackStart;
+    for (y = 0; y < height; ++ y){
+      dst[pos] = (sum * mult) >>> shift;
+      
+      p = y + radius;
+      p = x + ( (p < heightMinus1? p: heightMinus1) * width );
+      sum -= stack.color - dst[p];
+      
+      stack.color = dst[p];
+      stack = stack.next;
+      
+      pos += width;
+    }
+  }
+
+  return imageDst;
+};
+
+CV.gaussianBlur = function(imageSrc, imageDst, imageMean, kernelSize){
+  var kernel = CV.gaussianKernel(kernelSize);
+
+  imageDst.width = imageSrc.width;
+  imageDst.height = imageSrc.height;
+  
+  imageMean.width = imageSrc.width;
+  imageMean.height = imageSrc.height;
+
+  CV.gaussianBlurFilter(imageSrc, imageMean, kernel, true);
+  CV.gaussianBlurFilter(imageMean, imageDst, kernel, false);
+
+  return imageDst;
+};
+
+CV.gaussianBlurFilter = function(imageSrc, imageDst, kernel, horizontal){
+  var src = imageSrc.data, dst = imageDst.data,
+      height = imageSrc.height, width = imageSrc.width,
+      pos = 0, limit = kernel.length >> 1,
+      cur, value, i, j, k;
+      
+  for (i = 0; i < height; ++ i){
+    
+    for (j = 0; j < width; ++ j){
+      value = 0.0;
+    
+      for (k = -limit; k <= limit; ++ k){
+
+        if (horizontal){
+          cur = pos + k;
+          if (j + k < 0){
+            cur = pos;
+          }
+          else if (j + k >= width){
+            cur = pos;
+          }
+        }else{
+          cur = pos + (k * width);
+          if (i + k < 0){
+            cur = pos;
+          }
+          else if (i + k >= height){
+            cur = pos;
+          }
+        }
+
+        value += kernel[limit + k] * src[cur];
+      }
+    
+      dst[pos ++] = horizontal? value: (value + 0.5) & 0xff;
+    }
+  }
+
+  return imageDst;
+};
+
+CV.gaussianKernel = function(kernelSize){
+  var tab =
+    [ [1],
+      [0.25, 0.5, 0.25],
+      [0.0625, 0.25, 0.375, 0.25, 0.0625],
+      [0.03125, 0.109375, 0.21875, 0.28125, 0.21875, 0.109375, 0.03125] ],
+    kernel = [], center, sigma, scale2X, sum, x, i;
+
+  if ( (kernelSize <= 7) && (kernelSize % 2 === 1) ){
+    kernel = tab[kernelSize >> 1];
+  }else{
+    center = (kernelSize - 1.0) * 0.5;
+    sigma = 0.8 + (0.3 * (center - 1.0) );
+    scale2X = -0.5 / (sigma * sigma);
+    sum = 0.0;
+    for (i = 0; i < kernelSize; ++ i){
+      x = i - center;
+      sum += kernel[i] = Math.exp(scale2X * x * x);
+    }
+    sum = 1 / sum;
+    for (i = 0; i < kernelSize; ++ i){
+      kernel[i] *= sum;
+    }  
+  }
+
+  return kernel;
+};
+
+CV.findContours = function(imageSrc, binary){
+  var width = imageSrc.width, height = imageSrc.height, contours = [],
+      src, deltas, pos, pix, nbd, outer, hole, i, j;
+  
+  src = CV.binaryBorder(imageSrc, binary);
+
+  deltas = CV.neighborhoodDeltas(width + 2);
+
+  pos = width + 3;
+  nbd = 1;
+
+  for (i = 0; i < height; ++ i, pos += 2){
+  
+    for (j = 0; j < width; ++ j, ++ pos){
+      pix = src[pos];
+
+      if (0 !== pix){
+        outer = hole = false;
+
+        if (1 === pix && 0 === src[pos - 1]){
+          outer = true;
+        }
+        else if (pix >= 1 && 0 === src[pos + 1]){
+          hole = true;
+        }
+
+        if (outer || hole){
+          ++ nbd;
+          
+          contours.push( CV.borderFollowing(src, pos, nbd, {x: j, y: i}, hole, deltas) );
+        }
+      }
+    }
+  }  
+
+  return contours;
+};
+
+CV.borderFollowing = function(src, pos, nbd, point, hole, deltas){
+  var contour = [], pos1, pos3, pos4, s, s_end, s_prev;
+
+  contour.hole = hole;
+      
+  s = s_end = hole? 0: 4;
+  do{
+    s = (s - 1) & 7;
+    pos1 = pos + deltas[s];
+    if (src[pos1] !== 0){
+      break;
+    }
+  }while(s !== s_end);
+  
+  if (s === s_end){
+    src[pos] = -nbd;
+    contour.push( {x: point.x, y: point.y} );
+
+  }else{
+    pos3 = pos;
+    s_prev = s ^ 4;
+
+    while(true){
+      s_end = s;
+    
+      do{
+        pos4 = pos3 + deltas[++ s];
+      }while(src[pos4] === 0);
+      
+      s &= 7;
+      
+      if ( ( (s - 1) >>> 0) < (s_end >>> 0) ){
+        src[pos3] = -nbd;
+      }
+      else if (src[pos3] === 1){
+        src[pos3] = nbd;
+      }
+
+      contour.push( {x: point.x, y: point.y} );
+      
+      s_prev = s;
+
+      point.x += CV.neighborhood[s][0];
+      point.y += CV.neighborhood[s][1];
+
+      if ( (pos4 === pos) && (pos3 === pos1) ){
+        break;
+      }
+      
+      pos3 = pos4;
+      s = (s + 4) & 7;
+    }
+  }
+
+  return contour;
+};
+
+CV.neighborhood = 
+  [ [1, 0], [1, -1], [0, -1], [-1, -1], [-1, 0], [-1, 1], [0, 1], [1, 1] ];
+
+CV.neighborhoodDeltas = function(width){
+  var deltas = [], len = CV.neighborhood.length, i = 0;
+  
+  for (; i < len; ++ i){
+    deltas[i] = CV.neighborhood[i][0] + (CV.neighborhood[i][1] * width);
+  }
+  
+  return deltas.concat(deltas);
+};
+
+CV.approxPolyDP = function(contour, epsilon){
+  var slice = {start_index: 0, end_index: 0},
+      right_slice = {start_index: 0, end_index: 0},
+      poly = [], stack = [], len = contour.length,
+      pt, start_pt, end_pt, dist, max_dist, le_eps,
+      dx, dy, i, j, k;
+  
+  epsilon *= epsilon;
+  
+  k = 0;
+  
+  for (i = 0; i < 3; ++ i){
+    max_dist = 0;
+    
+    k = (k + right_slice.start_index) % len;
+    start_pt = contour[k];
+    if (++ k === len) {k = 0;}
+  
+    for (j = 1; j < len; ++ j){
+      pt = contour[k];
+      if (++ k === len) {k = 0;}
+    
+      dx = pt.x - start_pt.x;
+      dy = pt.y - start_pt.y;
+      dist = dx * dx + dy * dy;
+
+      if (dist > max_dist){
+        max_dist = dist;
+        right_slice.start_index = j;
+      }
+    }
+  }
+
+  if (max_dist <= epsilon){
+    poly.push( {x: start_pt.x, y: start_pt.y} );
+
+  }else{
+    slice.start_index = k;
+    slice.end_index = (right_slice.start_index += slice.start_index);
+  
+    right_slice.start_index -= right_slice.start_index >= len? len: 0;
+    right_slice.end_index = slice.start_index;
+    if (right_slice.end_index < right_slice.start_index){
+      right_slice.end_index += len;
+    }
+    
+    stack.push( {start_index: right_slice.start_index, end_index: right_slice.end_index} );
+    stack.push( {start_index: slice.start_index, end_index: slice.end_index} );
+  }
+
+  while(stack.length !== 0){
+    slice = stack.pop();
+    
+    end_pt = contour[slice.end_index % len];
+    start_pt = contour[k = slice.start_index % len];
+    if (++ k === len) {k = 0;}
+    
+    if (slice.end_index <= slice.start_index + 1){
+      le_eps = true;
+    
+    }else{
+      max_dist = 0;
+
+      dx = end_pt.x - start_pt.x;
+      dy = end_pt.y - start_pt.y;
+      
+      for (i = slice.start_index + 1; i < slice.end_index; ++ i){
+        pt = contour[k];
+        if (++ k === len) {k = 0;}
+        
+        dist = Math.abs( (pt.y - start_pt.y) * dx - (pt.x - start_pt.x) * dy);
+
+        if (dist > max_dist){
+          max_dist = dist;
+          right_slice.start_index = i;
+        }
+      }
+      
+      le_eps = max_dist * max_dist <= epsilon * (dx * dx + dy * dy);
+    }
+    
+    if (le_eps){
+      poly.push( {x: start_pt.x, y: start_pt.y} );
+
+    }else{
+      right_slice.end_index = slice.end_index;
+      slice.end_index = right_slice.start_index;
+
+      stack.push( {start_index: right_slice.start_index, end_index: right_slice.end_index} );
+      stack.push( {start_index: slice.start_index, end_index: slice.end_index} );
+    }
+  }
+  
+  return poly;
+};
+
+CV.warp = function(imageSrc, imageDst, contour, warpSize){
+  var src = imageSrc.data, dst = imageDst.data,
+      width = imageSrc.width, height = imageSrc.height,
+      pos = 0,
+      sx1, sx2, dx1, dx2, sy1, sy2, dy1, dy2, p1, p2, p3, p4,
+      m, r, s, t, u, v, w, x, y, i, j;
+  
+  m = CV.getPerspectiveTransform(contour, warpSize - 1);
+
+  r = m[8];
+  s = m[2];
+  t = m[5];
+  
+  for (i = 0; i < warpSize; ++ i){
+    r += m[7];
+    s += m[1];
+    t += m[4];
+
+    u = r;
+    v = s;
+    w = t;
+    
+    for (j = 0; j < warpSize; ++ j){
+      u += m[6];
+      v += m[0];
+      w += m[3];
+
+      x = v / u;
+      y = w / u;
+
+      sx1 = x >>> 0;
+      sx2 = (sx1 === width - 1)? sx1: sx1 + 1;
+      dx1 = x - sx1;
+      dx2 = 1.0 - dx1;
+
+      sy1 = y >>> 0;
+      sy2 = (sy1 === height - 1)? sy1: sy1 + 1;
+      dy1 = y - sy1;
+      dy2 = 1.0 - dy1;
+
+      p1 = p2 = sy1 * width;
+      p3 = p4 = sy2 * width;
+
+      dst[pos ++] = 
+        (dy2 * (dx2 * src[p1 + sx1] + dx1 * src[p2 + sx2]) +
+         dy1 * (dx2 * src[p3 + sx1] + dx1 * src[p4 + sx2]) ) & 0xff;
+
+    }
+  }
+
+  imageDst.width = warpSize;
+  imageDst.height = warpSize;
+
+  return imageDst;
+};
+
+CV.getPerspectiveTransform = function(src, size){
+  var rq = CV.square2quad(src);
+  
+  rq[0] /= size;
+  rq[1] /= size;
+  rq[3] /= size;
+  rq[4] /= size;
+  rq[6] /= size;
+  rq[7] /= size;
+  
+  return rq;
+};
+
+CV.square2quad = function(src){
+  var sq = [], px, py, dx1, dx2, dy1, dy2, den;
+  
+  px = src[0].x - src[1].x + src[2].x - src[3].x;
+  py = src[0].y - src[1].y + src[2].y - src[3].y;
+  
+  if (0 === px && 0 === py){
+    sq[0] = src[1].x - src[0].x;
+    sq[1] = src[2].x - src[1].x;
+    sq[2] = src[0].x;
+    sq[3] = src[1].y - src[0].y;
+    sq[4] = src[2].y - src[1].y;
+    sq[5] = src[0].y;
+    sq[6] = 0;
+    sq[7] = 0;
+    sq[8] = 1;
+
+  }else{
+    dx1 = src[1].x - src[2].x;
+    dx2 = src[3].x - src[2].x;
+    dy1 = src[1].y - src[2].y;
+    dy2 = src[3].y - src[2].y;
+    den = dx1 * dy2 - dx2 * dy1;
+  
+    sq[6] = (px * dy2 - dx2 * py) / den;
+    sq[7] = (dx1 * py - px * dy1) / den;
+    sq[8] = 1;
+    sq[0] = src[1].x - src[0].x + sq[6] * src[1].x;
+    sq[1] = src[3].x - src[0].x + sq[7] * src[3].x;
+    sq[2] = src[0].x;
+    sq[3] = src[1].y - src[0].y + sq[6] * src[1].y;
+    sq[4] = src[3].y - src[0].y + sq[7] * src[3].y;
+    sq[5] = src[0].y;
+  }
+
+  return sq;
+};
+
+CV.isContourConvex = function(contour){
+  var orientation = 0, convex = true,
+      len = contour.length, i = 0, j = 0,
+      cur_pt, prev_pt, dxdy0, dydx0, dx0, dy0, dx, dy;
+
+  prev_pt = contour[len - 1];
+  cur_pt = contour[0];
+
+  dx0 = cur_pt.x - prev_pt.x;
+  dy0 = cur_pt.y - prev_pt.y;
+
+  for (; i < len; ++ i){
+    if (++ j === len) {j = 0;}
+
+    prev_pt = cur_pt;
+    cur_pt = contour[j];
+
+    dx = cur_pt.x - prev_pt.x;
+    dy = cur_pt.y - prev_pt.y;
+    dxdy0 = dx * dy0;
+    dydx0 = dy * dx0;
+
+    orientation |= dydx0 > dxdy0? 1: (dydx0 < dxdy0? 2: 3);
+
+    if (3 === orientation){
+        convex = false;
+        break;
+    }
+
+    dx0 = dx;
+    dy0 = dy;
+  }
+
+  return convex;
+};
+
+CV.perimeter = function(poly){
+  var len = poly.length, i = 0, j = len - 1,
+      p = 0.0, dx, dy;
+
+  for (; i < len; j = i ++){
+    dx = poly[i].x - poly[j].x;
+    dy = poly[i].y - poly[j].y;
+    
+    p += Math.sqrt(dx * dx + dy * dy) ;
+  }
+
+  return p;
+};
+
+CV.minEdgeLength = function(poly){
+  var len = poly.length, i = 0, j = len - 1, 
+      min = Infinity, d, dx, dy;
+
+  for (; i < len; j = i ++){
+    dx = poly[i].x - poly[j].x;
+    dy = poly[i].y - poly[j].y;
+
+    d = dx * dx + dy * dy;
+
+    if (d < min){
+      min = d;
+    }
+  }
+  
+  return Math.sqrt(min);
+};
+
+CV.countNonZero = function(imageSrc, square){
+  var src = imageSrc.data, height = square.height, width = square.width,
+      pos = square.x + (square.y * imageSrc.width),
+      span = imageSrc.width - width,
+      nz = 0, i, j;
+  
+  for (i = 0; i < height; ++ i){
+
+    for (j = 0; j < width; ++ j){
+    
+      if ( 0 !== src[pos ++] ){
+        ++ nz;
+      }
+    }
+    
+    pos += span;
+  }
+
+  return nz;
+};
+
+CV.binaryBorder = function(imageSrc, dst){
+  var src = imageSrc.data, height = imageSrc.height, width = imageSrc.width,
+      posSrc = 0, posDst = 0, i, j;
+
+  for (j = -2; j < width; ++ j){
+    dst[posDst ++] = 0;
+  }
+
+  for (i = 0; i < height; ++ i){
+    dst[posDst ++] = 0;
+    
+    for (j = 0; j < width; ++ j){
+      dst[posDst ++] = (0 === src[posSrc ++]? 0: 1);
+    }
+    
+    dst[posDst ++] = 0;
+  }
+
+  for (j = -2; j < width; ++ j){
+    dst[posDst ++] = 0;
+  }
+  
+  return dst;
+};
+
+/*
+Copyright (c) 2011 Juan Mellado
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+/*
+References:
+- "ArUco: a minimal library for Augmented Reality applications based on OpenCv"
+  http://www.uco.es/investiga/grupos/ava/node/26
+*/
+
+
+
+var AR = AR || {};
+
+AR.Marker = function(id, corners){
+  this.id = id;
+  this.corners = corners;
+};
+
+AR.Detector = function(){
+  this.grey = new CV.Image();
+  this.thres = new CV.Image();
+  this.homography = new CV.Image();
+  this.binary = [];
+  this.contours = [];
+  this.polys = [];
+  this.candidates = [];
+};
+
+AR.Detector.prototype.detect = function(image){
+  CV.grayscale(image, this.grey);
+  CV.adaptiveThreshold(this.grey, this.thres, 2, 7);
+  
+  this.contours = CV.findContours(this.thres, this.binary);
+
+  this.candidates = this.findCandidates(this.contours, image.width * 0.20, 0.05, 10);
+  this.candidates = this.clockwiseCorners(this.candidates);
+  this.candidates = this.notTooNear(this.candidates, 10);
+
+  return this.findMarkers(this.grey, this.candidates, 49);
+};
+
+AR.Detector.prototype.findCandidates = function(contours, minSize, epsilon, minLength){
+  var candidates = [], len = contours.length, contour, poly, i;
+
+  this.polys = [];
+  
+  for (i = 0; i < len; ++ i){
+    contour = contours[i];
+
+    if (contour.length >= minSize){
+      poly = CV.approxPolyDP(contour, contour.length * epsilon);
+
+      this.polys.push(poly);
+
+      if ( (4 === poly.length) && ( CV.isContourConvex(poly) ) ){
+
+        if ( CV.minEdgeLength(poly) >= minLength){
+          candidates.push(poly);
+        }
+      }
+    }
+  }
+
+  return candidates;
+};
+
+AR.Detector.prototype.clockwiseCorners = function(candidates){
+  var len = candidates.length, dx1, dx2, dy1, dy2, swap, i;
+
+  for (i = 0; i < len; ++ i){
+    dx1 = candidates[i][1].x - candidates[i][0].x;
+    dy1 = candidates[i][1].y - candidates[i][0].y;
+    dx2 = candidates[i][2].x - candidates[i][0].x;
+    dy2 = candidates[i][2].y - candidates[i][0].y;
+
+    if ( (dx1 * dy2 - dy1 * dx2) < 0){
+      swap = candidates[i][1];
+      candidates[i][1] = candidates[i][3];
+      candidates[i][3] = swap;
+    }
+  }
+
+  return candidates;
+};
+
+AR.Detector.prototype.notTooNear = function(candidates, minDist){
+  var notTooNear = [], len = candidates.length, dist, dx, dy, i, j, k;
+
+  for (i = 0; i < len; ++ i){
+  
+    for (j = i + 1; j < len; ++ j){
+      dist = 0;
+      
+      for (k = 0; k < 4; ++ k){
+        dx = candidates[i][k].x - candidates[j][k].x;
+        dy = candidates[i][k].y - candidates[j][k].y;
+      
+        dist += dx * dx + dy * dy;
+      }
+      
+      if ( (dist / 4) < (minDist * minDist) ){
+      
+        if ( CV.perimeter( candidates[i] ) < CV.perimeter( candidates[j] ) ){
+          candidates[i].tooNear = true;
+        }else{
+          candidates[j].tooNear = true;
+        }
+      }
+    }
+  }
+
+  for (i = 0; i < len; ++ i){
+    if ( !candidates[i].tooNear ){
+      notTooNear.push( candidates[i] );
+    }
+  }
+
+  return notTooNear;
+};
+
+AR.Detector.prototype.findMarkers = function(imageSrc, candidates, warpSize){
+  var markers = [], len = candidates.length, candidate, marker, i;
+
+  for (i = 0; i < len; ++ i){
+    candidate = candidates[i];
+
+    CV.warp(imageSrc, this.homography, candidate, warpSize);
+  
+    CV.threshold(this.homography, this.homography, CV.otsu(this.homography) );
+
+    marker = this.getMarker(this.homography, candidate);
+    if (marker){
+      markers.push(marker);
+    }
+  }
+  
+  return markers;
+};
+
+AR.Detector.prototype.getMarker = function(imageSrc, candidate){
+  var width = (imageSrc.width / 7) >>> 0,
+      minZero = (width * width) >> 1,
+      bits = [], rotations = [], distances = [],
+      square, pair, inc, i, j;
+
+  for (i = 0; i < 7; ++ i){
+    inc = (0 === i || 6 === i)? 1: 6;
+    
+    for (j = 0; j < 7; j += inc){
+      square = {x: j * width, y: i * width, width: width, height: width};
+      if ( CV.countNonZero(imageSrc, square) > minZero){
+        return null;
+      }
+    }
+  }
+
+  for (i = 0; i < 5; ++ i){
+    bits[i] = [];
+
+    for (j = 0; j < 5; ++ j){
+      square = {x: (j + 1) * width, y: (i + 1) * width, width: width, height: width};
+      
+      bits[i][j] = CV.countNonZero(imageSrc, square) > minZero? 1: 0;
+    }
+  }
+
+  rotations[0] = bits;
+  distances[0] = this.hammingDistance( rotations[0] );
+  
+  pair = {first: distances[0], second: 0};
+  
+  for (i = 1; i < 4; ++ i){
+    rotations[i] = this.rotate( rotations[i - 1] );
+    distances[i] = this.hammingDistance( rotations[i] );
+    
+    if (distances[i] < pair.first){
+      pair.first = distances[i];
+      pair.second = i;
+    }
+  }
+
+  if (0 !== pair.first){
+    return null;
+  }
+
+  return new AR.Marker(
+    this.mat2id( rotations[pair.second] ), 
+    this.rotate2(candidate, 4 - pair.second) );
+};
+
+AR.Detector.prototype.hammingDistance = function(bits){
+  var ids = [ [1,0,0,0,0], [1,0,1,1,1], [0,1,0,0,1], [0,1,1,1,0] ],
+      dist = 0, sum, minSum, i, j, k;
+
+  for (i = 0; i < 5; ++ i){
+    minSum = Infinity;
+    
+    for (j = 0; j < 4; ++ j){
+      sum = 0;
+
+      for (k = 0; k < 5; ++ k){
+          sum += bits[i][k] === ids[j][k]? 0: 1;
+      }
+
+      if (sum < minSum){
+        minSum = sum;
+      }
+    }
+
+    dist += minSum;
+  }
+
+  return dist;
+};
+
+AR.Detector.prototype.mat2id = function(bits){
+  var id = 0, i;
+  
+  for (i = 0; i < 5; ++ i){
+    id <<= 1;
+    id |= bits[i][1];
+    id <<= 1;
+    id |= bits[i][3];
+  }
+
+  return id;
+};
+
+AR.Detector.prototype.rotate = function(src){
+  var dst = [], len = src.length, i, j;
+  
+  for (i = 0; i < len; ++ i){
+    dst[i] = [];
+    for (j = 0; j < src[i].length; ++ j){
+      dst[i][j] = src[src[i].length - j - 1][i];
+    }
+  }
+
+  return dst;
+};
+
+AR.Detector.prototype.rotate2 = function(src, rotation){
+  var dst = [], len = src.length, i;
+  
+  for (i = 0; i < len; ++ i){
+    dst[i] = src[ (rotation + i) % len ];
+  }
+
+  return dst;
+};
+
+
+</script>
+<script>
+"use strict";
+const Q = Math.PI / 2;
+
+/* ---------- Levels ----------
+   Blocks are unit cubes at integer (x,y,z). A tile is walkable where nothing sits on top.
+   Tiles connect when they *look* adjacent in the isometric view: (x-z, y-z) differs by one.
+   That is the whole trick behind the impossible joins. */
+const LEVELS = [
+  {
+    name: "The Bridge", hint: "Twist marker 8 to swing the bridge into place, then point marker 9 at the far tower.",
+    statics: [[0,0,0],[1,0,0],[2,0,0],[0,0,-1,1],[1,0,-1,1],[2,0,-1,1],[1,0,-2,1],
+              [8,0,0],[9,0,0],[8,0,-1,1],[9,0,-1,1],[9,0,-2,1],[9,0,-3,1]],
+    group: { pivot: [5,0], q: 1, carry: true, blocks: [[3,0,0],[4,0,0],[5,0,0],[6,0,0],[7,0,0]] },
+    start: [0,0,0], goal: [9,0,0]
+  },
+  {
+    name: "The Ride", hint: "The bridge carries you. Step on, then turn it again while you stand there.",
+    statics: [[0,0,0],[1,0,0],[2,0,0],[0,0,-1,1],[1,0,-1,1],[2,0,-1,1],[1,0,-2,1],
+              [8,6,3],[8,7,3],[8,8,3],[8,6,2,1],[8,6,1,1],[8,6,0,1],[8,8,2,1],[8,8,1,1],[8,8,0,1],[8,8,-1,1]],
+    group: { pivot: [5,0], q: 1, carry: true, blocks: [[3,0,0],[4,0,0],[5,0,0],[6,0,0],[7,0,0]] },
+    start: [0,0,0], goal: [8,8,3]
+  },
+  {
+    name: "The Long Way", hint: "This bridge stays locked while you stand on it. Go round, then turn it behind you.",
+    statics: [[0,5,0],[1,5,0],[2,5,0],[0,5,-1,1],[1,5,-1,1],[2,5,-1,1],
+              [8,5,0],[8,4,0],[8,3,0],[8,2,0],[8,5,-1,1],[8,4,-1,1],[8,3,-1,1],[8,2,-1,1],[8,2,-2,1],
+              [6,1,-1],[5,1,-1],[4,1,-1],[6,1,-2,1],[5,1,-2,1],[4,1,-2,1],[4,1,-3,1],
+              [6,9,1],[6,10,1],[6,9,0,1],[6,10,0,1],[6,10,-1,1],[6,10,-2,1]],
+    group: { pivot: [5,5], q: 1, carry: false, blocks: [[3,5,0],[4,5,0],[5,5,0],[6,5,0],[7,5,0]] },
+    start: [0,5,0], goal: [6,10,1]
+  }
+];
+
+/* ---------- Palette (canvas) ---------- */
+const PAL = {
+  stone: { top:[243,234,220], left:[218,197,170], right:[180,150,124] },
+  deco:  { top:[236,224,208], left:[205,183,158], right:[163,134,112] },
+  turn:  { top:[163,211,200], left:[107,164,154], right:[73,126,120] },
+  turnLocked: { top:[190,204,201], left:[150,165,163], right:[118,131,130] },
+};
+const mix = (a,b,t) => a.map((v,i)=>Math.round(v+(b[i]-v)*t));
+const rgb = c => `rgb(${c[0]},${c[1]},${c[2]})`;
+
+/* ---------- State ---------- */
+const cv = document.getElementById("game"), ctx = cv.getContext("2d");
+let W=0, H=0, DPR=1, A=40, OX=0, OY=0;
+let L, blocks, groupDef, theta=0, thetaT=0, graphCache=new Map();
+let lvl = 0, won = false, wonAt = 0, flipDir = 1;
+const ch = { at:0, to:-1, t:0, path:[], face:1, walkClock:0 };
+let hover = null, mouseHover = null, failFlash = null;
+
+function loadLevel(i){
+  lvl = i; L = LEVELS[i]; won = false;
+  blocks = [];
+  for (const s of L.statics) blocks.push({ id:blocks.length, x:s[0], y:s[1], z:s[2], deco:!!s[3], g:false });
+  groupDef = L.group;
+  for (const s of groupDef.blocks) blocks.push({ id:blocks.length, x:s[0], y:s[1], z:s[2], deco:false, g:true });
+  theta = thetaT = groupDef.q * Q;
+  graphCache.clear();
+  const find = p => blocks.find(b=>b.x===p[0]&&b.y===p[1]&&b.z===p[2]).id;
+  ch.at = find(L.start); ch.to=-1; ch.t=0; ch.path=[]; ch.face=1;
+  L.goalId = find(L.goal);
+  document.getElementById("lvlnum").textContent = "Level " + ["I","II","III"][i] + " of III";
+  document.getElementById("lvlname").textContent = L.name;
+  document.getElementById("hint").textContent = L.hint;
+  document.getElementById("dots").innerHTML = LEVELS.map((_,k)=>`<span class="dot ${k<i?"done":k===i?"now":""}"></span>`).join("");
+  document.getElementById("veil").classList.remove("show");
+  fit();
+}
+
+/* ---------- Geometry ---------- */
+const pc = () => [groupDef.pivot[0]+.5, groupDef.pivot[1]+.5];
+function rot(x,y,th){ const [cx,cy]=pc(), c=Math.cos(th), s=Math.sin(th);
+  return [cx+(x-cx)*c-(y-cy)*s, cy+(x-cx)*s+(y-cy)*c]; }
+function wpt(b,dx,dy,dz,th){ // world point of block-local offset
+  if(!b.g) return [b.x+dx,b.y+dy,b.z+dz];
+  const r = rot(b.x+dx,b.y+dy,th); return [r[0],r[1],b.z+dz]; }
+function proj(p){ return [OX + A*(p[0]-p[1]), OY + A*((p[0]+p[1])*.5 - p[2])]; }
+function topCenter(b){ return proj(wpt(b,.5,.5,1,theta)); }
+function depth(b){ const p=wpt(b,.5,.5,.5,theta); return p[0]+p[1]+p[2]; }
+
+function snappedQ(){ const k=Math.round(theta/Q); return Math.abs(theta-k*Q)<0.012 ? ((k%4)+4)%4 : -1; }
+function cellOf(b,q){ if(!b.g) return [b.x,b.y,b.z];
+  const r = rot(b.x+.5,b.y+.5,q*Q); return [Math.floor(r[0]+1e-6),Math.floor(r[1]+1e-6),b.z]; }
+
+function graphFor(q){
+  if (graphCache.has(q)) return graphCache.get(q);
+  const occ = new Map(), list=[];
+  for (const b of blocks){ if (b.g && q<0) continue; const c=cellOf(b,q); occ.set(c.join(","),b); list.push([b,c]); }
+  const byUV = new Map();
+  for (const [b,c] of list){
+    if (b.deco || occ.has([c[0],c[1],c[2]+1].join(","))) continue;
+    const k=(c[0]-c[2])+","+(c[1]-c[2]), d=c[0]+c[1]+c[2], prev=byUV.get(k);
+    if (!prev || prev.d<d) byUV.set(k,{b,d,u:c[0]-c[2],v:c[1]-c[2]});   // frontmost wins: it hides the other
+  }
+  const adj=new Map(), tiles=new Set();
+  for (const t of byUV.values()){ tiles.add(t.b.id); const n=[];
+    for (const [du,dv] of [[1,0],[-1,0],[0,1],[0,-1]]){ const o=byUV.get((t.u+du)+","+(t.v+dv)); if(o) n.push(o.b.id); }
+    adj.set(t.b.id,n); }
+  const g={adj,tiles}; graphCache.set(q,g); return g;
+}
+function bfs(g,from,to){
+  if(!g.tiles.has(from)||!g.tiles.has(to)) return null;
+  const prev=new Map([[from,-1]]), qu=[from];
+  while(qu.length){ const c=qu.shift(); if(c===to) break;
+    for(const n of g.adj.get(c)) if(!prev.has(n)){ prev.set(n,c); qu.push(n); } }
+  if(!prev.has(to)) return null;
+  const p=[]; for(let c=to;c!==-1;c=prev.get(c)) p.unshift(c); return p;
+}
+
+function fit(){
+  DPR = Math.min(2, window.devicePixelRatio||1);
+  W = innerWidth; H = innerHeight; cv.width=W*DPR; cv.height=H*DPR;
+  let mnx=1e9,mxx=-1e9,mny=1e9,mxy=-1e9;
+  for (const b of blocks) for (let q=0;q<4;q++) for (const dx of [0,1]) for (const dy of [0,1]) for (const dz of [0,1]){
+    const p=wpt(b,dx,dy,dz,q*Q), x=p[0]-p[1], y=(p[0]+p[1])*.5-p[2];
+    mnx=Math.min(mnx,x); mxx=Math.max(mxx,x); mny=Math.min(mny,y); mxy=Math.max(mxy,y); }
+  const narrow = W < 640;
+  const availW = W*0.86, availH = H*(narrow?0.56:0.66);
+  A = Math.min(availW/(mxx-mnx), availH/(mxy-mny+1.2), 96);
+  OX = W/2 - A*(mnx+mxx)/2;
+  OY = H*(narrow?0.58:0.55) - A*(mny+mxy)/2 + A*0.4;
+}
+addEventListener("resize", fit);
+
+/* ---------- Rotation control ---------- */
+const turn = { active:false, prev:0, acc:0, base:0, last:0, drag:null };
+function rotationLocked(){
+  if (won || ch.to>=0 || ch.path.length) return true;
+  return !groupDef.carry && blocks[ch.at].g;
+}
+function nearestQ(a){ return Math.round(a/Q)*Q; }
+function wrapPi(a){ while(a>Math.PI) a-=2*Math.PI; while(a<-Math.PI) a+=2*Math.PI; return a; }
+
+function markerTurn(raw, now){
+  if (!turn.active){ turn.active=true; turn.prev=raw; turn.acc=0; turn.base=thetaT; }
+  turn.last = now;
+  const d = wrapPi(raw - turn.prev); turn.prev = raw;
+  if (rotationLocked()){ turn.acc=0; turn.base=thetaT; return; }
+  turn.acc += d;
+  let t = turn.base - flipDir*turn.acc;
+  const k = nearestQ(t); if (Math.abs(t-k) < 0.14) t = k;   // gentle detents at each quarter
+  thetaT = t;
+}
+function releaseTurn(){ turn.active=false; thetaT = nearestQ(thetaT); }
+
+/* ---------- Walking ---------- */
+function goTo(id){
+  if (won) return;
+  const q = snappedQ(); if (q<0) { failFlash={id,t:performance.now()}; return; }
+  const start = ch.to>=0 ? ch.to : ch.at;
+  const p = bfs(graphFor(q), start, id);
+  if (!p) { failFlash={id,t:performance.now()}; tone(196,.35,.05); return; }
+  ch.path = p.slice(1);
+}
+function pickTile(x,y){
+  const q = snappedQ(); if (q<0) return null;
+  const g = graphFor(q); let best=null, bd=-1e9;
+  for (const id of g.tiles){ const b=blocks[id], c=topCenter(b);
+    if (Math.abs(x-c[0])/A + Math.abs(y-c[1])/(A/2) <= 1){ const d=depth(b); if(d>bd){bd=d;best=id;} } }
+  return best;
+}
+
+/* ---------- Audio ---------- */
+let ac=null;
+function audio(){ if(!ac){ try{ ac=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }
+function tone(f,d=.6,v=.06,delay=0){ if(!ac) return;
+  const o=ac.createOscillator(), g=ac.createGain(), t=ac.currentTime+delay;
+  o.type="sine"; o.frequency.value=f; g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(v,t+.02);
+  g.gain.exponentialRampToValueAtTime(.0001,t+d); o.connect(g).connect(ac.destination); o.start(t); o.stop(t+d+.05); }
+
+/* ---------- Camera + markers ---------- */
+const video = document.createElement("video"); video.playsInline=true; video.muted=true;
+const proc = document.createElement("canvas"); proc.width=320; proc.height=240;
+const pctx = proc.getContext("2d", { willReadFrequently:true });
+const prev = document.getElementById("preview"), prctx = prev.getContext("2d");
+let detector=null, camOn=false, markers=[];
+const cursor = { x:0, y:0, seen:0, show:false, dwell:0, tile:null, fired:null };
+
+document.getElementById("camBtn").onclick = async () => {
+  audio();
+  const note = document.getElementById("camNote"), btn = document.getElementById("camBtn");
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ video:{ width:640, height:480, facingMode:"user" }, audio:false });
+    video.srcObject = s; await video.play(); detector = new AR.Detector(); camOn = true;
+    btn.textContent = "Camera on"; btn.disabled = true; btn.classList.add("ghost");
+    note.textContent = "Twist 8 like a dial. Aim 9 at a tile and hold still for a moment.";
+  } catch(e){
+    note.textContent = "The camera is blocked here. Open this file in Chrome or Safari and allow camera access, or play with the mouse.";
+  }
+};
+
+function processCamera(now){
+  if (!camOn || video.readyState < 2) return;
+  pctx.drawImage(video,0,0,320,240);
+  markers = detector.detect(pctx.getImageData(0,0,320,240));
+  const m8 = markers.find(m=>m.id===8), m9 = markers.find(m=>m.id===9);
+  document.getElementById("chip8").classList.toggle("on", !!m8);
+  document.getElementById("chip9").classList.toggle("on", !!m9);
+  if (m8){ const c=m8.corners; markerTurn(Math.atan2(c[1].y-c[0].y, c[1].x-c[0].x), now); }
+  else if (turn.active && now-turn.last>350) releaseTurn();
+  if (m9){
+    let cx=0, cy=0; for(const p of m9.corners){cx+=p.x;cy+=p.y;} cx/=4; cy/=4;
+    const nx = 1 - cx/320, ny = cy/240;                      // mirror so it moves like a mirror
+    const tx = Math.max(0,Math.min(1,(nx-.12)/.76))*W, ty = Math.max(0,Math.min(1,(ny-.12)/.76))*H;
+    if (!cursor.show){ cursor.x=tx; cursor.y=ty; }
+    cursor.tx=tx; cursor.ty=ty; cursor.seen=now; cursor.show=true;
+  } else if (now-cursor.seen>300) { cursor.show=false; cursor.dwell=0; cursor.tile=null; cursor.fired=null; }
+  drawPreview(m8,m9);
+}
+function drawPreview(){
+  const w=prev.width, h=prev.height, s=w/320;
+  prctx.save(); prctx.translate(w,0); prctx.scale(-1,1); prctx.drawImage(video,0,0,w,h); prctx.restore();
+  prctx.fillStyle="rgba(40,34,48,.25)"; prctx.fillRect(0,0,w,h);
+  for (const m of markers){
+    if (m.id!==8 && m.id!==9) continue;
+    const col = m.id===8 ? "#7fd0c2" : "#f3b23e";
+    prctx.strokeStyle=col; prctx.lineWidth=4; prctx.beginPath();
+    m.corners.forEach((p,i)=>{ const x=w-p.x*s, y=p.y*s; i?prctx.lineTo(x,y):prctx.moveTo(x,y); });
+    prctx.closePath(); prctx.stroke();
+    const c0=m.corners[0]; prctx.fillStyle=col; prctx.beginPath(); prctx.arc(w-c0.x*s,c0.y*s,6,0,7); prctx.fill();
+    let cx=0,cy=0; for(const p of m.corners){cx+=p.x;cy+=p.y;}
+    prctx.font="600 22px Karla, sans-serif"; prctx.fillStyle="#fff"; prctx.textAlign="center";
+    prctx.fillText(m.id===8?"8 turn":"9 walk", w-cx/4*s, cy/4*s+8);
+  }
+}
+
+/* ---------- Pointer + keys ---------- */
+cv.addEventListener("pointerdown", e => {
+  audio();
+  const pv = blocks.find(b=>b.g && b.x===groupDef.pivot[0] && b.y===groupDef.pivot[1]);
+  const c = topCenter(pv);
+  if (Math.hypot(e.clientX-c[0], (e.clientY-c[1])*2) < A*0.9){
+    turn.drag = { x:e.clientX, y:e.clientY, base:thetaT, moved:false }; cv.setPointerCapture(e.pointerId); return;
+  }
+  const t = pickTile(e.clientX, e.clientY); if (t!==null) goTo(t);
+});
+cv.addEventListener("pointermove", e => {
+  if (turn.drag){ if (Math.abs(e.clientX-turn.drag.x)>5) turn.drag.moved=true; if (!turn.drag.moved || rotationLocked()) return; let t = turn.drag.base + (e.clientX-turn.drag.x)/(A*2.2)*Q;
+    const k=nearestQ(t); if(Math.abs(t-k)<.14) t=k; thetaT=t; return; }
+  mouseHover = pickTile(e.clientX, e.clientY);
+});
+cv.addEventListener("pointerup", e => { if (turn.drag){ const d=turn.drag; turn.drag=null; thetaT=nearestQ(thetaT);
+    if (!d.moved){ const t=pickTile(d.x,d.y); if (t!==null) goTo(t); } } });
+addEventListener("keydown", e => {
+  audio(); const k=e.key.toLowerCase();
+  if ((k==="q"||k==="e") && !rotationLocked()) thetaT = nearestQ(thetaT) + (k==="e"?Q:-Q);
+  if (k==="r") restart();
+  if (k==="f") flipDir *= -1;
+});
+function restart(){ loadLevel(won && lvl===LEVELS.length-1 ? 0 : lvl); }
+document.getElementById("resetBtn").onclick = restart;
+
+/* ---------- Update ---------- */
+let lastQ = null, last = performance.now();
+function update(now){
+  const dt = Math.min(.05,(now-last)/1000); last = now;
+  processCamera(now);
+
+  // rotation easing
+  theta += (thetaT-theta) * Math.min(1, dt*9);
+  if (Math.abs(thetaT-theta) < .004) theta = thetaT;
+  const q = snappedQ();
+  if (q !== lastQ){ if (q>=0 && lastQ!==null) { tone(523,.5,.05); tone(784,.7,.035,.06); } lastQ=q; }
+
+  // walking
+  if (ch.to<0 && ch.path.length){
+    const g = graphFor(snappedQ()), nxt = ch.path[0];
+    if (snappedQ()>=0 && g.adj.get(ch.at)?.includes(nxt)){ ch.to=nxt; ch.t=0; ch.path.shift();
+      const a=topCenter(blocks[ch.at]), b=topCenter(blocks[ch.to]); if (Math.abs(b[0]-a[0])>1) ch.face=Math.sign(b[0]-a[0]); }
+    else ch.path=[];
+  }
+  if (ch.to>=0){ ch.t += dt*3.1; ch.walkClock += dt;
+    if (ch.t>=1){ ch.at=ch.to; ch.to=-1; ch.t=0; tone(880+Math.random()*120,.12,.012); } }
+
+  if (!won && ch.at===L.goalId && ch.to<0){
+    won=true; wonAt=now; [523,659,784,1047].forEach((f,i)=>tone(f,1.2,.05,i*.12));
+    const v=document.getElementById("veil"), vt=document.getElementById("veilText");
+    vt.innerHTML = lvl<LEVELS.length-1 ? "The way opens<small>next path</small>" : "Every path walked<small>press R to begin again</small>";
+    v.classList.add("show");
+    if (lvl<LEVELS.length-1) setTimeout(()=>loadLevel(lvl+1), 2600);
+  }
+
+  // marker-9 dwell
+  if (cursor.show){
+    cursor.x += (cursor.tx-cursor.x)*Math.min(1,dt*12); cursor.y += (cursor.ty-cursor.y)*Math.min(1,dt*12);
+    const t = pickTile(cursor.x,cursor.y);
+    if (t!==cursor.tile){ cursor.tile=t; cursor.dwell=0; if (t!==cursor.fired) cursor.fired=null; }
+    else if (t!==null && cursor.fired!==t){ cursor.dwell+=dt; if (cursor.dwell>=.75){ cursor.fired=t; goTo(t); } }
+  }
+  hover = cursor.show ? cursor.tile : mouseHover;
+}
+
+/* ---------- Draw ---------- */
+const FACES = [ // corners (dx,dy,dz) and outward normal
+  { n:[0,0,1], c:[[0,0,1],[1,0,1],[1,1,1],[0,1,1]] },
+  { n:[1,0,0], c:[[1,0,0],[1,1,0],[1,1,1],[1,0,1]] },
+  { n:[-1,0,0],c:[[0,0,0],[0,0,1],[0,1,1],[0,1,0]] },
+  { n:[0,1,0], c:[[0,1,0],[0,1,1],[1,1,1],[1,1,0]] },
+  { n:[0,-1,0],c:[[0,0,0],[1,0,0],[1,0,1],[0,0,1]] },
+];
+function poly(pts, fill){ ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath();
+  ctx.fillStyle=fill; ctx.fill(); ctx.strokeStyle=fill; ctx.lineWidth=1; ctx.stroke(); }
+
+function drawBlock(b, walk){
+  const locked = b.g && rotationLocked() && !groupDef.carry && blocks[ch.at].g;
+  const pal = b.g ? (locked?PAL.turnLocked:PAL.turn) : (b.deco?PAL.deco:PAL.stone);
+  const c=Math.cos(b.g?theta:0), s=Math.sin(b.g?theta:0);
+  const order = FACES.slice(1).concat([FACES[0]]);
+  for (const f of order){
+    const n=[f.n[0]*c-f.n[1]*s, f.n[0]*s+f.n[1]*c, f.n[2]];
+    if (n[0]+n[1]+n[2] <= 1e-3) continue;
+    const pts = f.c.map(d=>proj(wpt(b,d[0],d[1],d[2],theta)));
+    const col = n[2]>.5 ? pal.top : mix(pal.right, pal.left, Math.max(0,Math.min(1,(n[1]-n[0]+1)/2)));
+    poly(pts, rgb(col));
+  }
+  if (walk && !b.deco){ // inset path square
+    const pts=[[.18,.18],[.82,.18],[.82,.82],[.18,.82]].map(d=>proj(wpt(b,d[0],d[1],1,theta)));
+    ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath();
+    ctx.strokeStyle = b.g ? "rgba(30,70,66,.22)" : "rgba(110,85,60,.16)"; ctx.lineWidth=1.2; ctx.stroke();
+  }
+  if (b.g && b.x===groupDef.pivot[0] && b.y===groupDef.pivot[1]) drawDial(b, locked);
+}
+function ring(b, r, th0){ const pts=[]; for(let i=0;i<40;i++){ const a=i/40*Math.PI*2;
+  pts.push(proj(wpt(b,.5+r*Math.cos(a),.5+r*Math.sin(a),1,theta))); } return pts; }
+function drawDial(b, locked){
+  poly(ring(b,.34), locked?"rgb(160,172,170)":"rgb(86,140,132)");
+  poly(ring(b,.25), locked?"rgb(205,214,212)":"rgb(190,228,219)");
+  const k = proj(wpt(b,.5+.3,.5,1,theta)), cc=proj(wpt(b,.5,.5,1,theta));
+  ctx.strokeStyle = locked?"rgb(140,150,148)":"rgb(52,96,90)"; ctx.lineWidth=Math.max(2,A*.05); ctx.lineCap="round";
+  ctx.beginPath(); ctx.moveTo(cc[0],cc[1]); ctx.lineTo(k[0],k[1]); ctx.stroke();
+  ctx.fillStyle = "rgb(238,170,52)"; ctx.beginPath(); ctx.arc(k[0],k[1],A*.07,0,7); ctx.fill();
+}
+
+function drawSky(now){
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,"#ecd3c3"); g.addColorStop(.55,"#d9cdcf"); g.addColorStop(1,"#b6c4cf");
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  const sx=W*.72, sy=H*.3, sr=Math.min(W,H)*.22;
+  const sg=ctx.createRadialGradient(sx,sy,0,sx,sy,sr*1.8); sg.addColorStop(0,"rgba(255,236,210,.95)"); sg.addColorStop(.4,"rgba(255,226,196,.5)"); sg.addColorStop(1,"rgba(255,226,196,0)");
+  ctx.fillStyle=sg; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle="rgba(255,246,236,.55)";
+  for (let i=0;i<4;i++){ const y=H*(.2+i*.17), w=W*(.22+.06*(i%2)), x=((now*.004*(i+1)+i*W*.37)%(W+w*2))-w;
+    ctx.beginPath(); ctx.ellipse(x,y,w*.5,H*.012+i*1.5,0,0,7); ctx.fill(); }
+}
+
+function drawCharacter(now){
+  let p;
+  if (ch.to>=0){ const a=topCenter(blocks[ch.at]), b=topCenter(blocks[ch.to]); const t=ch.t; p=[a[0]+(b[0]-a[0])*t, a[1]+(b[1]-a[1])*t]; }
+  else p = topCenter(blocks[ch.at]);
+  const s=A, bob = ch.to>=0 ? Math.abs(Math.sin(ch.walkClock*10))*s*.05 : Math.sin(now/600)*s*.012;
+  const x=p[0], y=p[1];
+  ctx.fillStyle="rgba(60,45,40,.22)"; ctx.beginPath(); ctx.ellipse(x,y,s*.24,s*.11,0,0,7); ctx.fill();
+  const top=y-s*.78-bob;
+  // cloak
+  ctx.fillStyle="#b5463b"; ctx.beginPath(); ctx.moveTo(x-s*.2,y-s*.02); ctx.quadraticCurveTo(x-s*.17,y-s*.5-bob,x,top);
+  ctx.quadraticCurveTo(x+s*.17,y-s*.5-bob,x+s*.2,y-s*.02); ctx.quadraticCurveTo(x,y+s*.05,x-s*.2,y-s*.02); ctx.fill();
+  ctx.fillStyle="#8e3129"; ctx.beginPath(); ctx.moveTo(x+ch.face*0,top); ctx.quadraticCurveTo(x+ch.face*s*.17,y-s*.5-bob,x+ch.face*s*.2,y-s*.02);
+  ctx.quadraticCurveTo(x+ch.face*s*.1,y+s*.03,x,y+s*.03); ctx.closePath(); ctx.fill();
+  // head
+  ctx.fillStyle="#f6eee4"; ctx.beginPath(); ctx.arc(x,top-s*.06,s*.12,0,7); ctx.fill();
+  ctx.fillStyle="#3b3444"; ctx.beginPath(); ctx.arc(x+ch.face*s*.05,top-s*.07,s*.018,0,7); ctx.fill();
+  // lantern
+  const lx=x+ch.face*s*.26, ly=y-s*.36-bob*1.4;
+  ctx.strokeStyle="#5a4b3e"; ctx.lineWidth=Math.max(1,s*.02); ctx.beginPath(); ctx.moveTo(x+ch.face*s*.13,y-s*.46-bob); ctx.lineTo(lx,ly-s*.05); ctx.stroke();
+  const lg=ctx.createRadialGradient(lx,ly,0,lx,ly,s*.3); lg.addColorStop(0,"rgba(255,214,120,.65)"); lg.addColorStop(1,"rgba(255,214,120,0)");
+  ctx.fillStyle=lg; ctx.beginPath(); ctx.arc(lx,ly,s*.3,0,7); ctx.fill();
+  ctx.fillStyle="#eeaa34"; ctx.beginPath(); ctx.arc(lx,ly,s*.055,0,7); ctx.fill();
+}
+
+function drawGoal(now){
+  const b=blocks[L.goalId], c=topCenter(b);
+  const rise = won ? Math.min(1,(now-wonAt)/1500) : 0;
+  const y = c[1] - A*(.62 + Math.sin(now/700)*.05 + rise*.8), r=A*.13;
+  const g=ctx.createRadialGradient(c[0],y,0,c[0],y,A*(.6+rise)); g.addColorStop(0,"rgba(255,204,96,.7)"); g.addColorStop(1,"rgba(255,204,96,0)");
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(c[0],y,A*(.6+rise),0,7); ctx.fill();
+  ctx.fillStyle="#eeaa34"; ctx.beginPath(); ctx.moveTo(c[0],y-r*1.5); ctx.lineTo(c[0]+r,y); ctx.lineTo(c[0],y+r*1.5); ctx.lineTo(c[0]-r,y); ctx.closePath(); ctx.fill();
+  ctx.fillStyle="#fbe2a6"; ctx.beginPath(); ctx.moveTo(c[0],y-r*1.5); ctx.lineTo(c[0]+r,y); ctx.lineTo(c[0],y); ctx.closePath(); ctx.fill();
+  if (won){ const k=((now-wonAt)/1400)%1; ctx.strokeStyle=`rgba(238,170,52,${1-k})`; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(c[0],c[1],A*(.4+k*2),A*(.2+k),0,0,7); ctx.stroke(); }
+}
+
+function outlineTile(id, col, w){
+  const b=blocks[id], pts=[[0,0],[1,0],[1,1],[0,1]].map(d=>proj(wpt(b,d[0],d[1],1,theta)));
+  ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.closePath();
+  ctx.strokeStyle=col; ctx.lineWidth=w; ctx.stroke();
+}
+
+function draw(now){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  drawSky(now);
+  const q=snappedQ(), g=q>=0?graphFor(q):null;
+  const order = blocks.slice().sort((a,b)=>depth(a)-depth(b) || a.z-b.z);
+  for (const b of order) drawBlock(b, g && g.tiles.has(b.id));
+  if (failFlash && now-failFlash.t<500) outlineTile(failFlash.id, `rgba(181,70,59,${1-(now-failFlash.t)/500})`, 2.5);
+  if (hover!==null && g && g.tiles.has(hover)) outlineTile(hover, "rgba(238,170,52,.95)", 2.5);
+  // planned path markers
+  if (ch.path.length){ ctx.fillStyle="rgba(238,170,52,.75)"; for (const id of ch.path){ const c=topCenter(blocks[id]); ctx.beginPath(); ctx.ellipse(c[0],c[1],A*.07,A*.035,0,0,7); ctx.fill(); } }
+  drawGoal(now);
+  drawCharacter(now);
+  if (cursor.show){
+    const r=A*.32; ctx.lineWidth=2;
+    ctx.strokeStyle="rgba(59,52,68,.55)"; ctx.beginPath(); ctx.arc(cursor.x,cursor.y,r,0,7); ctx.stroke();
+    if (cursor.tile!==null && cursor.fired!==cursor.tile){ ctx.strokeStyle="#eeaa34"; ctx.lineWidth=4;
+      ctx.beginPath(); ctx.arc(cursor.x,cursor.y,r,-Q,-Q+Math.min(1,cursor.dwell/.75)*Math.PI*2); ctx.stroke(); }
+    ctx.fillStyle="#3b3444"; ctx.beginPath(); ctx.arc(cursor.x,cursor.y,3,0,7); ctx.fill();
+  }
+}
+
+function frame(now){ update(now); draw(now); requestAnimationFrame(frame); }
+loadLevel(0);
+requestAnimationFrame(frame);
+
+/* test hook */
+window.__turnstone = { LEVELS, loadLevel, graphFor, bfs, get blocks(){return blocks;}, setQ(q){theta=thetaT=q*Q;}, ch, tc:id=>topCenter(blocks[id]), get won(){return won;}, get lvl(){return lvl;} };
+</script>
+</body>
+</html>

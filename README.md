@@ -39,3 +39,12 @@ You are an office worker. Sneak off to slack while the boss isn't looking. Three
 Play: https://marie-6.github.io/fun-games/look-busy/
 
 Controls: W A S D only.
+
+## Turnstone
+A Monument Valley–style puzzle. Turn the bridge to make paths that only exist from this angle.
+
+Play: https://marie-6.github.io/fun-games/turnstone/
+
+Controls: two printed ArUco markers held up to the webcam. Marker 8 turns the bridge, marker 9 picks where to walk. Mouse and Q / E also work.
+
+![Turnstone markers: 8 turns, 9 walks](turnstone/markers/turnstone-markers.png)
