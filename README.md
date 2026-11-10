@@ -63,3 +63,5 @@ Demo video of the paper tools (the 东南西北 fortune teller and the shrine do
 Controls: printed ArUco markers held up to the webcam. Keyboard for testing: 9 opens or closes the shrine, 1–8 pick a fortune, 0 goes back, D shows the debug view.
 
 Full guide with how to play, the marker codes and how the code works: [fortune-shrine/README.md](fortune-shrine/README.md)
+
+![Fortune Shrine paper tools: the shrine door with marker 9 and the fortune teller with markers 1 to 8](fortune-shrine/tools.jpg)

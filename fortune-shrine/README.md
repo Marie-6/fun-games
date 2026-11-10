@@ -21,6 +21,11 @@ Everyone already knows how to use a fortune teller, so there is nothing new to l
 
 ## What you need
 
+<img src="tools.jpg" width="560" alt="The two paper tools on a cutting mat: a blue card with the shrine door flipped open showing marker 9, and a green paper fortune teller with markers 1 to 8 under its flaps.">
+
+*The paper tools: the shrine door (blue, flipped open to show marker 9) and the 东南西北 fortune teller (green, markers 1–8 under the flaps).*
+
+
 - A laptop or phone with a webcam, and Chrome, Safari or Firefox
 - A printed marker sheet ([markers.html](https://marie-6.github.io/fun-games/fortune-shrine/markers.html), print at 100%)
 - One square sheet of paper folded into a fortune teller, with markers **1–8** glued under the eight inner flaps
@@ -179,6 +184,7 @@ fortune-shrine/
 ├── play-demo-poster.jpg
 ├── demo.mp4          video of the paper tools
 ├── demo-poster.jpg   video thumbnail
+├── tools.jpg         photo of the paper tools
 └── lib/
     ├── cv.js         js-aruco computer vision helpers
     └── aruco.js      js-aruco marker detector
