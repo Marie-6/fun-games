@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Shrine Markers</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; padding: 24px; color: #222; background: #fff; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  .note { color: #555; margin: 0 0 20px; max-width: 720px; line-height: 1.5; font-size: 14px; }
+  .controls { margin-bottom: 20px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .controls button { font: inherit; padding: 6px 14px; border-radius: 6px; border: 1px solid #999; background: #f4f4f4; cursor: pointer; }
+  .grid { display: flex; flex-wrap: wrap; gap: 18px; }
+  figure { margin: 0; text-align: center; border: 1px dashed #bbb; padding: 10px; }
+  figure svg { display: block; width: var(--size, 4cm); height: var(--size, 4cm); }
+  figcaption { font-size: 13px; margin-top: 6px; }
+  figcaption b { font-size: 15px; }
+  @media print {
+    .controls, .note { display: none; }
+    body { padding: 0; }
+    figure { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+  <h1>Paper Fortune Teller — Markers</h1>
+  <p class="note">
+    Original ArUco markers for the shrine. Print at 100% scale. Glue <b>1–8</b> under the eight inner flaps of the fortune teller,
+    and <b>9</b> on the shrine key card. Keep the white margin around each marker; the tracker needs that contrast.
+    Matte paper works better than glossy, since glare hides the marker.
+  </p>
+  <div class="controls">
+    Marker size:
+    <button data-size="3cm">3 cm (inner flaps)</button>
+    <button data-size="4cm">4 cm</button>
+    <button data-size="6cm">6 cm (key card)</button>
+    <button onclick="window.print()">Print</button>
+  </div>
+  <div class="grid" id="grid"></div>
+
+<script>
+  // Original ArUco (5x5 data bits inside a black border, 7x7 cells total).
+  // Each data row is one of four Hamming words, and two bits of the ID pick which one.
+  const WORDS = [[1,0,0,0,0],[1,0,1,1,1],[0,1,0,0,1],[0,1,1,1,0]];
+  function markerSVG(id) {
+    let rects = '';
+    for (let r = 0; r < 5; r++) {
+      const word = WORDS[(id >> (2 * (4 - r))) & 3];
+      for (let c = 0; c < 5; c++) if (word[c]) rects += `<rect x="${c + 2}" y="${r + 2}" width="1" height="1"/>`;
+    }
+    // 1 cell of white quiet zone, then 7x7 marker (black border + data)
+    return `<svg viewBox="0 0 9 9" shape-rendering="crispEdges">
+      <rect width="9" height="9" fill="#fff"/><rect x="1" y="1" width="7" height="7" fill="#000"/>
+      <g fill="#fff">${rects}</g></svg>`;
+  }
+  const LABELS = { 9: 'Shrine key (opens / closes the door)' };
+  const grid = document.getElementById('grid');
+  for (let id = 1; id <= 9; id++) {
+    grid.insertAdjacentHTML('beforeend',
+      `<figure>${markerSVG(id)}<figcaption><b>[${id}]</b> ${LABELS[id] || 'Fortune flap ' + id}</figcaption></figure>`);
+  }
+  document.querySelectorAll('[data-size]').forEach(b =>
+    b.onclick = () => grid.style.setProperty('--size', b.dataset.size));
+</script>
+</body>
+</html>

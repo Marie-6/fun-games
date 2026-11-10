@@ -48,3 +48,12 @@ Play: https://marie-6.github.io/fun-games/turnstone/
 Controls: two printed ArUco markers held up to the webcam. Marker 8 turns the bridge, marker 9 picks where to walk. Mouse and Q / E also work.
 
 ![Turnstone markers: 8 turns, 9 walks](turnstone/markers/turnstone-markers.png)
+
+## Fortune Shrine
+A paper fortune teller (cootie catcher) controller. Show the paper shrine door (marker 9) to open the shrine for 5 minutes, then open a flap of the fortune teller (markers 1–8) and hold it inside the circle. Each flap gives an animal, a lucky color and a thing to do today, with a sound and an animation.
+
+Play: https://marie-6.github.io/fun-games/fortune-shrine/
+
+Printable markers: https://marie-6.github.io/fun-games/fortune-shrine/markers.html
+
+Controls: printed ArUco markers held up to the webcam. Keyboard for testing: 9 opens or closes the shrine, 1–8 pick a fortune, 0 goes back, D shows the debug view.
