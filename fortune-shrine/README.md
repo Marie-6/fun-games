@@ -8,9 +8,14 @@ Everyone already knows how to use a fortune teller, so there is nothing new to l
 
 **🖨 Printable markers:** https://marie-6.github.io/fun-games/fortune-shrine/markers.html
 
+**🎬 Watch how to play:** https://marie-6.github.io/fun-games/fortune-shrine/play-demo.mp4
+
 **🎬 Demo of the paper tools:** https://marie-6.github.io/fun-games/fortune-shrine/demo.mp4
 
-<a href="https://marie-6.github.io/fun-games/fortune-shrine/demo.mp4"><img src="demo-poster.jpg" width="240" alt="The paper fortune teller with ArUco markers under its flaps. Click to watch the demo video."></a>
+| How to play (75 s) | The paper tools (12 s) |
+|---|---|
+| <a href="https://marie-6.github.io/fun-games/fortune-shrine/play-demo.mp4"><img src="play-demo-poster.jpg" width="240" alt="Playing the game: a Turtle fortune in Tomato Red on the laptop, with the paper fortune teller in front. Click to watch."></a> | <a href="https://marie-6.github.io/fun-games/fortune-shrine/demo.mp4"><img src="demo-poster.jpg" width="240" alt="The paper fortune teller with ArUco markers under its flaps. Click to watch the demo video."></a> |
+| Opening the shrine, playing the 东南西北, and getting a 🐢 Turtle and a 🐸 Frog fortune | The 东南西北 fortune teller and the shrine door with marker 9 |
 
 ---
 
@@ -170,6 +175,8 @@ fortune-shrine/
 ├── index.html        the game
 ├── markers.html      printable marker sheet (IDs 1–9)
 ├── markers/          marker images used in this README
+├── play-demo.mp4     video of the game being played
+├── play-demo-poster.jpg
 ├── demo.mp4          video of the paper tools
 ├── demo-poster.jpg   video thumbnail
 └── lib/
