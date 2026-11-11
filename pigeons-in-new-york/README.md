@@ -23,7 +23,8 @@ The whole game uses one button: **Space** (or tap the screen on a phone).
 **Easy** (quiet streets), **Medium** (normal day) and **Hard** (rush hour). Each mode keeps its own best score.
 
 ## Neighborhoods
-12 neighborhoods, each 4 streets long. Every game starts in Midtown and ends at Coney Island. The 10 in between are shuffled and never repeat: Central Park, Chinatown, Times Square, Brooklyn, Washington Square Park, Brooklyn Bridge, Wall Street, Little Italy, Harlem and Rockefeller Center. Each one has its own look and its own traffic, like horse carriages in Central Park or delivery e-bikes in Chinatown.
+12 neighborhoods, each 4 streets long. Every game starts in Midtown, and Coney Island is the last stop (its streets keep going until you lose). The 10 in between are shuffled and never repeat: Central Park, Chinatown, Times Square, Brooklyn, Washington Square Park, Brooklyn Bridge, Wall Street, Little Italy, Harlem and Rockefeller Center. Each one has its own look and its own traffic, like horse carriages in Central Park or delivery e-bikes in Chinatown.
 
 ## Files
-- `index.html`: the whole game in one file
+- `index.html`: page layout, styles, title and game over screens
+- `sketch.js`: all the game code: input, traffic, pigeon, drawing, sound
