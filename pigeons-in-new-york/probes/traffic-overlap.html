@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Probe: do cars overlap?</title>
+  <style>
+    body { margin: 0; padding: 24px 16px; font: 15px/1.5 system-ui, sans-serif; background: #f7f5f0; color: #1d1d1f; }
+    main { max-width: 640px; margin: 0 auto; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #ddd; }
+    button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 0; background: #f7c21b; cursor: pointer; }
+    code { background: #ebe7dd; padding: 1px 4px; border-radius: 3px; }
+    @media (prefers-color-scheme: dark) { body { background: #1d1e21; color: #eee; } code { background: #33353a; } th, td { border-color: #444; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Probe: do cars overlap?</h1>
+  <p>This page reuses the car-spawning rule from <code>sketch.js</code>. It simulates 2,000 random lanes for 30 seconds each, once with the <b>old</b> rule and once with the <b>new</b> rule, and counts the frames where two cars in the same lane overlap.</p>
+  <p><b>Old rule:</b> a new car only checks the car added just before it.<br>
+     <b>New rule:</b> a new car checks every car in its lane and waits until there's a gap of at least <code>speed × minT</code>.</p>
+  <button id="run">Run again</button>
+  <table>
+    <thead><tr><th>Rule</th><th>Frames with overlapping cars</th><th>Smallest gap between cars</th></tr></thead>
+    <tbody id="out"></tbody>
+  </table>
+  <p><b>What it shows:</b> the spawning rule alone produces overlaps (old) or doesn't (new).<br>
+     <b>What it doesn't show:</b> how the game looks or feels. It doesn't draw anything, and it uses the Hard-mode minimum gap (<code>minT = 1.2</code>) only.</p>
+</main>
+<script>
+const rand = (a, b) => a + Math.random() * (b - a);
+const VH = 700, minT = 1.2, LENS = [70, 150, 120, 30, 84, 72]; // car, bus, carriage, e-bike, ice cream truck, car
+
+function simulate(useNewRule) {
+  let overlapFrames = 0, smallest = Infinity;
+  for (let trial = 0; trial < 2000; trial++) {
+    const dir = Math.random() < 0.5 ? 1 : -1, speed = rand(85, 340);
+    const gap = () => Math.max(rand(150, 420) * 0.6, speed * minT);
+    // cars already on the street when it appears (same as genRoad)
+    let cars = [], y = -220 + rand(0, 200);
+    while (y < VH + 220) { const len = LENS[Math.floor(Math.random() * LENS.length)]; cars.push({ y: y + len / 2, len }); y += len + gap(); }
+    let timer = rand(0.2, 1.2);
+    for (let t = 0; t < 30; t += 1 / 60) {
+      for (const c of cars) c.y += dir * speed / 60;
+      cars = cars.filter(c => c.y > -300 && c.y < VH + 300);
+      timer -= 1 / 60;
+      if (timer <= 0) {
+        const len = LENS[Math.floor(Math.random() * LENS.length)];
+        const car = { len, y: dir > 0 ? -len / 2 - 30 : VH + len / 2 + 30 };
+        let ok;
+        if (useNewRule) {
+          const clear = Math.max(40, speed * minT);
+          ok = cars.every(o => Math.abs(o.y - car.y) > o.len / 2 + car.len / 2 + clear);
+        } else {
+          const last = cars[cars.length - 1];
+          ok = !last || Math.abs(last.y - car.y) > last.len / 2 + car.len / 2 + 24;
+        }
+        if (ok) { cars.push(car); timer = (gap() + len) / speed; } else timer = 0.2;
+      }
+      const sorted = [...cars].sort((a, b) => a.y - b.y);
+      for (let i = 1; i < sorted.length; i++) {
+        const g = sorted[i].y - sorted[i - 1].y - (sorted[i].len + sorted[i - 1].len) / 2;
+        smallest = Math.min(smallest, g);
+        if (g < 0) overlapFrames++;
+      }
+    }
+  }
+  return { overlapFrames, smallest };
+}
+
+function run() {
+  const rows = [['Old (before 8a4995a)', simulate(false)], ['New (8a4995a and later)', simulate(true)]];
+  document.getElementById('out').innerHTML = rows.map(([name, r]) =>
+    `<tr><td>${name}</td><td>${r.overlapFrames.toLocaleString()}</td><td>${r.smallest.toFixed(1)} px${r.smallest < 0 ? ' (overlap)' : ''}</td></tr>`).join('');
+}
+document.getElementById('run').addEventListener('click', run);
+run();
+</script>
+</body>
+</html>
